@@ -572,20 +572,6 @@ def copyStaticFiles(outputPath):
     return libraryStaticFiles
 
 
-@timing
-def generateKernelObjectsFromSolutions(solutions):
-    kernels = []
-    kernelNames = set()
-    for solution in solutions:
-        solutionKernels = solution.getKernels()
-        for kernel in solutionKernels:
-            kName = getKeyNoInternalArgs(kernel, False)
-            if kName not in kernelNames:
-                kernels.append(kernel)
-                kernelNames.add(kName)
-    return kernels
-
-
 def generateKernelHelperObjects(solutions: List[Solution], cxxCompiler: str, isaInfoMap):
     """
     Generates a unique list of kernel helpers.
@@ -986,5 +972,6 @@ from .IO import (
 )
 from .Logic import (
     _renameFallbackPlaceholders,
+    generateKernelObjectsFromSolutions,
     renameFallbacksPerArch,
 )

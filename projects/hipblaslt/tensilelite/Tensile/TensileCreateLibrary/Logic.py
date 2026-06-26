@@ -34,6 +34,22 @@ resolving.
 import copy
 
 from Tensile.SolutionLibrary import PlaceholderLibrary
+from Tensile.SolutionStructs.Naming import getKeyNoInternalArgs
+from Tensile.Utilities.Decorators.Timing import timing
+
+
+@timing
+def generateKernelObjectsFromSolutions(solutions):
+    kernels = []
+    kernelNames = set()
+    for solution in solutions:
+        solutionKernels = solution.getKernels()
+        for kernel in solutionKernels:
+            kName = getKeyNoInternalArgs(kernel, False)
+            if kName not in kernelNames:
+                kernels.append(kernel)
+                kernelNames.add(kName)
+    return kernels
 
 
 def _renameFallbackPlaceholders(node, arch: str) -> None:
