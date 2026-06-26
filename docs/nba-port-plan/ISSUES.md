@@ -129,7 +129,22 @@ projects/hipblaslt/tensilelite/docs/decisions/ (a NEW peer to the existing Tensi
 
 ---
 
-## STATUS (2026-06-26)
+## STATUS (2026-06-26) — PORT COMPLETE
+
+**All stages done (NBA-0…16), 28 commits, build-green, nothing pushed.** Run.py
+1138→405 LOC; IO 223 / Logic 237 / Tuning 446. Final full gate 4981/220/0
+(identical to the NBA-0b baseline → zero regression). Stage 3 (NBA-9/10/11) and
+Stage 4 (NBA-12/13) each passed an adversarial skeptic workflow (brokenCount=0):
+byte-identity sha256-matched, import cycle proven non-vacuous across 5
+fresh-interpreter orders, every monkeypatch retarget sentinel-proven effective.
+ADRs 0001-0019 in `projects/hipblaslt/tensilelite/docs/decisions/`. Stage-3 commits
+6d00f0f/7f6d63e/1db9414; Stage-4 a26c84e/3f49136; NBA-14 7cf414a; NBA-15 2b4dee3;
+NBA-16 cf9dfde. Open follow-up (not part of this port): `_checkInvalidSolutions`
+dead-code owner decision (ADR-0008).
+
+---
+
+## Stage-0 history
 
 Stage 0 is **COMPLETE and committed** on branch `users/davidd-amd/tensilelite-new-build-algo`:
 - NBA-0  (916a38fc0fb) — ADR home + ADR-0001. NOTE: the ADR file is named
