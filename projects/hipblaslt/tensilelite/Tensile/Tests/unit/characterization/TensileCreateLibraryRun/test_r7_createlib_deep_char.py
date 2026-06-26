@@ -437,6 +437,18 @@ class TestWriteSolutionsAndKernelsTCL:
                         )
         assert called, "writeHelpers must be called from writeSolutionsAndKernelsTCL"
 
+    def test_return_contract_is_count_unique_results_triple(self, tmp_path):
+        """NBA-0e: pin the live (line 1036) emitter's exact 3-tuple return
+        shape (count:int, uniqueKernels:list, results:list) so the later move
+        to Tuning.py is verifiable. run() unpacks this triple positionally."""
+        ret = self._run_mocked(tmp_path)
+        assert isinstance(ret, tuple) and len(ret) == 3
+        count, uniqueKernels, results = ret
+        assert isinstance(count, int)
+        assert isinstance(uniqueKernels, list)
+        assert isinstance(results, list)
+        assert count == len(uniqueKernels)
+
 
 # ===========================================================================
 # 6. generateLogicDataAndSolutions — uncovered branches
