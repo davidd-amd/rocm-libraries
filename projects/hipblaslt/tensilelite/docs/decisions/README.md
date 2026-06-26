@@ -37,3 +37,4 @@ record's **History** section. Use the template below.
 - [0004 — Pin the TCL emitter return contract and normalize the __init__ facade](0004-pin-tcl-emitter-and-normalize-facade.md)
 - [0005 — Extract path helpers to IO.py](0005-extract-path-helpers-to-io.md)
 - [0006 — Extract stinky-asm ELF verification to IO.py](0006-extract-stinky-verify-to-io.md)
+- [0007 — Extract mem-compression helpers to IO.py](0007-extract-mem-compression-to-io.md)

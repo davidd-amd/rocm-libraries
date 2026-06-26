@@ -32,6 +32,8 @@ are re-imported back into Run.py so existing imports keep resolving.
 """
 
 import os
+import pickle
+import zlib
 
 from pathlib import Path
 from typing import Collection, List, Union
@@ -144,3 +146,10 @@ def _verify_stinky_asm_comment_vs_elf_text(s_path: Path, o_path: Path, kernel_ba
             _stinky_out(
                 f"CheckASMCodeSize: OK STINKY_TOTAL_INST_BYTES vs ELF .text match for {kernel_base}"
             )
+
+
+def memCompress(obj):
+    return zlib.compress(pickle.dumps(obj))
+
+def memDecompress(byt):
+    return pickle.loads(zlib.decompress(byt))

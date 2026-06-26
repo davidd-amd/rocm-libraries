@@ -103,12 +103,6 @@ class KernelMinResult(NamedTuple):
     mathclk: int
 
 
-def memCompress(obj):
-    return zlib.compress(pickle.dumps(obj))
-
-def memDecompress(byt):
-    return pickle.loads(zlib.decompress(byt))
-
 def processKernelSource(kernelWriterAssembly, data, outOptions, splitGSU, kernel, compress = False) -> KernelCodeGenResult:
     """
     Generate source for a single kernel.
@@ -1041,5 +1035,7 @@ from .IO import (
     _verify_stinky_asm_comment_vs_elf_text,
     libraryDir,
     libraryRoot,
+    memCompress,
+    memDecompress,
     tensileLibraryFile,
 )
