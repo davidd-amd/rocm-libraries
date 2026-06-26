@@ -53,6 +53,7 @@ pytestmark = pytest.mark.unit
 # Module under test
 # ---------------------------------------------------------------------------
 M = importlib.import_module("Tensile.TensileCreateLibrary.Run")
+Logic = importlib.import_module("Tensile.TensileCreateLibrary.Logic")
 SL = importlib.import_module("Tensile.SolutionLibrary")
 
 _DATA_DIR = Path(__file__).parent / "data"
@@ -552,7 +553,7 @@ class TestGenerateLogicDataAndSolutionsExtra:
             "GenSolTable": False,
         }
 
-        with patch.object(M, "ParallelMap2", return_value=iter(fake_results)):
+        with patch.object(Logic, "ParallelMap2", return_value=iter(fake_results)):
             solutions, masterLibs, mapping = M.generateLogicDataAndSolutions(
                 [str(_LOGIC_YAML), str(_LOGIC_YAML)], args, base_assembler, base_isa_map
             )

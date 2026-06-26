@@ -44,3 +44,4 @@ record's **History** section. Use the template below.
 - [0011 — Extract writeAssembly + writeHelpers to IO.py](0011-extract-write-primitives-to-io.md)
 - [0012 — Extract copyStaticFiles to IO.py](0012-extract-copystaticfiles-to-io.md)
 - [0013 — Extract passPostKernelInfoToLibrary to Tuning.py](0013-extract-passpostkernelinfotolibrary-to-tuning.md)
+- [0014 — Extract generateLogicDataAndSolutions to Logic.py](0014-extract-generatelogicdataandsolutions-to-logic.md)

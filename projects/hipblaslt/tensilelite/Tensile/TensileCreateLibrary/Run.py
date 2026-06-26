@@ -423,131 +423,6 @@ def generateKernelHelperObjects(solutions: List[Solution], cxxCompiler: str, isa
     return sorted(khos, key=sortByEnum, reverse=True) # Ensure that we write Enum kernel helpers are first in list
 
 
-@timing
-def generateLogicDataAndSolutions(logicFiles, args, assembler: Assembler, isaInfoMap):
-
-    if ";" in args["Architecture"]:
-        archs = args["Architecture"].split(";")  # user arg list format
-    else:
-        archs = args["Architecture"].split("_")  # workaround for cmake list in list issue
-
-    solutions = []
-    masterLibraries = {}
-    nextSolIndex = 0
-    splitGSU = False
-    printSolutionRejectionReason = True
-    printIndexAssignmentInfo = False
-
-    fIter = zip(
-        logicFiles,
-        itertools.repeat(assembler),
-        itertools.repeat(splitGSU),
-        itertools.repeat(printSolutionRejectionReason),
-        itertools.repeat(printIndexAssignmentInfo),
-        itertools.repeat(isaInfoMap),
-        itertools.repeat(args["LazyLibraryLoading"]),
-    )
-
-    def libraryIter(lib: MasterSolutionLibrary):
-        if len(lib.solutions):
-            for i, s in enumerate(lib.solutions.items()):
-                yield (i, *s)
-        else:
-            for _, lazyLib in lib.lazyLibraries.items():
-                yield from libraryIter(lazyLib)
-
-    for library in ParallelMap2(
-        LibraryIO.parseLibraryLogicFile, fIter, "Loading Logics...", return_as="generator_unordered"
-    ):
-        _, architectureName, _, _, _, newLibrary, typeMismatches = library
-        mergeTypeMismatchCollector(typeMismatches)
-
-        if architectureName == "":
-            continue
-
-        if architectureName in masterLibraries:
-            nextSolIndex = masterLibraries[architectureName].merge(newLibrary, nextSolIndex)
-        else:
-            masterLibraries[architectureName] = newLibrary
-            masterLibraries[architectureName].version = args["CodeObjectVersion"]
-
-    # After all YAML files have been parsed and Solution objects created,
-    # print a summary of any type mismatches that were collected.
-    printTypeMismatchSummary(len(logicFiles))
-
-    # Sort masterLibraries to make global soln index values deterministic
-    solnReIndex = 0
-    masterLibraries = dict(sorted(masterLibraries.items()))
-    for _, masterLibrary in masterLibraries.items():
-        for _, sol in masterLibrary.solutions.items():
-            sol.index = solnReIndex
-            solnReIndex += 1
-        # Sort masterLibrary to make global soln index values deterministic
-        masterLibrary.lazyLibraries = dict(sorted(masterLibrary.lazyLibraries.items()))
-        for name, lib in masterLibrary.lazyLibraries.items():
-            # Sort solns by the lib logic file they were generated from
-            lib.solutions = {
-                k: lib.solutions[k]
-                for k in sorted(lib.solutions, key=lambda idx: lib.solutions[idx].srcName)
-            }
-            for _, sol in lib.solutions.items():
-                sol.index = solnReIndex
-                solnReIndex += 1
-
-    if args["GenSolTable"]:
-        matchTable = {}
-        # Match yaml file solutions to solution index
-        for _, masterLibrary in masterLibraries.items():
-            for _, _, s in libraryIter(masterLibrary):
-                matchTable[s.index] = [s.srcName, s.libraryLogicIndex]
-        LibraryIO.write("MatchTable", matchTable)
-
-    fallbackAdded = "fallback" in masterLibraries.keys()
-    if fallbackAdded:
-        for key, value in masterLibraries.items():
-            if key != "fallback":
-                value.merge(masterLibraries["fallback"])
-        masterLibraries.pop("fallback")
-    if fallbackAdded:
-        # Must run AFTER merge (so per-arch masters carry their own fallback
-        # entries) and BEFORE the codeObjectFile-assignment loop below (which
-        # snapshots the dict key as the on-disk filename for each solution).
-        renameFallbacksPerArch(masterLibraries)
-    solIndex = []
-    for _, masterLibrary in masterLibraries.items():
-        for _, sol in masterLibrary.solutions.items():
-            solutions.append(sol.originalSolution)
-            solIndex.append(sol.index)
-        for name, lib in masterLibrary.lazyLibraries.items():
-            for _, sol in lib.solutions.items():
-                sol.originalSolution._state["codeObjectFile"] = name
-                solutions.append(sol.originalSolution)
-                solIndex.append(sol.index)
-
-    # Get the solution index and it's codeObjectFile name
-    codeObjectFilesIndex = {}
-    for solution, index in zip(solutions, solIndex):
-        if "codeObjectFile" in solution._state and solution._state["codeObjectFile"] is not None:
-            if solution._state["codeObjectFile"] in codeObjectFilesIndex:
-                codeObjectFilesIndex[solution._state["codeObjectFile"]] = min(index, codeObjectFilesIndex[solution._state["codeObjectFile"]])
-            else:
-                codeObjectFilesIndex[solution._state["codeObjectFile"]] = index
-
-    # Reorder to int: name format
-    codeObjectFilesIndex = {v: k for k, v in codeObjectFilesIndex.items()}
-    # Reorder to maintain ascending order by index
-    codeObjectFilesIndex = dict(sorted(codeObjectFilesIndex.items()))
-
-    # remove duplicates while preserving order
-    numSoln = len(solutions)
-    solutions = dict.fromkeys(solutions).keys()
-
-    print1(f"Number of solutions parsed: {numSoln}")
-    print1(f"Number of unique solutions: {len(solutions)}")
-
-    return solutions, masterLibraries, codeObjectFilesIndex
-
-
 ################################################################################
 # Tensile Create Library
 ################################################################################
@@ -784,6 +659,7 @@ from .IO import (
 from .Logic import (
     _renameFallbackPlaceholders,
     generateKernelObjectsFromSolutions,
+    generateLogicDataAndSolutions,
     renameFallbacksPerArch,
 )
 from .Tuning import (
