@@ -22,23 +22,16 @@
 #
 ################################################################################
 
-import rocisa
-
-import copy
-import functools
 import glob
 import itertools
 import os
 import shutil
-import pickle
-import zlib
 from pathlib import Path
 from timeit import default_timer as timer
-from typing import Collection, List, NamedTuple, Optional, Union
+from typing import List, NamedTuple, Optional, Union
 
-from Tensile import SOURCE_PATH, LibraryIO
+from Tensile import LibraryIO
 from Tensile.Common import (
-    CHeader,
     DebugConfig,
     ensurePath,
     HR,
@@ -48,38 +41,27 @@ from Tensile.Common import (
     print2,
     printWarning,
     printExit,
-    printWarning,
     state,
-    tqdm,
     setVerbosity,
     getVerbosity,
 )
 from Tensile.Common.Architectures import gfxToIsa, isaToGfx, SUPPORTED_GFX, splitArchsFromPredicates, filterLogicFilesByPredicates
 from Tensile.Common.Capabilities import makeIsaInfoMap
 from Tensile.Common.GlobalParameters import assignGlobalParameters, globalParameters
-from Tensile.Common.TimingInstrumentation import timing_context
-from Tensile.SolutionStructs.Naming import getKernelFileBase, getKeyNoInternalArgs, getKernelNameMin
+from Tensile.SolutionStructs.Naming import getKernelFileBase, getKeyNoInternalArgs
 
 from Tensile.CustomYamlLoader import load_logic_gfx_arch
 from Tensile.KernelHelperNaming import kernelObjectNameCallables, initHelperKernelObjects
 from Tensile.KernelWriterAssembly import KernelWriterAssembly
-from Tensile.KernelWriterBase import (
-    KERNEL_HELPER_FILENAME_CPP,
-    KERNEL_HELPER_FILENAME_H,
-)
-from Tensile.SolutionLibrary import MasterSolutionLibrary, PlaceholderLibrary
 from Tensile.SolutionStructs import Solution
-from Tensile.SolutionStructs.Solution import mergeTypeMismatchCollector, printTypeMismatchSummary
-from Tensile.verify_stinky_comment_vs_elf_text import verify_stinky_paths
-from Tensile.Toolchain.Assembly import makeAssemblyToolchain, buildAssemblyCodeObjectFiles
-from Tensile.Toolchain.Source import makeSourceToolchain, buildSourceCodeObjectFiles
+from Tensile.Toolchain.Assembly import makeAssemblyToolchain
+from Tensile.Toolchain.Source import makeSourceToolchain
 from Tensile.Toolchain.Validators import (
     ToolchainDefaults,
     validateToolchain,
 )
 from Tensile.Toolchain.Component import Assembler
 from Tensile.Utilities.Decorators.Profile import profile
-from Tensile.Utilities.Decorators.Timing import timing
 
 from .ParseArguments import parseArguments
 
