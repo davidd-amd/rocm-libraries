@@ -32,3 +32,6 @@ record's **History** section. Use the template below.
 ## Index
 
 - [0001 — TensileCreateLibrary decomposition: extract-then-reexport](0001-tensilecreatelibrary-decomposition.md)
+- [0002 — Pin passPostKernelInfoToLibrary before extraction](0002-pin-passpostkernelinfotolibrary.md)
+- [0003 — Executable import-surface contract for the port](0003-lock-import-surface.md)
+- [0004 — Pin the TCL emitter return contract and normalize the __init__ facade](0004-pin-tcl-emitter-and-normalize-facade.md)
