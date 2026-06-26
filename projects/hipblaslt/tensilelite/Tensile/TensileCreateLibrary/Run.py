@@ -447,23 +447,6 @@ def writeSolutionsAndKernelsTCL(
     return len(uniqueAsmKernels), uniqueAsmKernels, results
 
 
-@timing
-def copyStaticFiles(outputPath):
-    libraryStaticFiles = [
-        "TensileTypes.h",
-        "tensile_bfloat16.h",
-        "tensile_float8_bfloat8.h",
-        "KernelHeader.h",
-        "ReductionTemplate.h",
-        "memory_gfx.h",
-    ]
-
-    for fileName in libraryStaticFiles:
-        shutil.copy(os.path.join(SOURCE_PATH, fileName), outputPath)
-
-    return libraryStaticFiles
-
-
 def generateKernelHelperObjects(solutions: List[Solution], cxxCompiler: str, isaInfoMap):
     """
     Generates a unique list of kernel helpers.
@@ -856,6 +839,7 @@ from .IO import (
     _stinky_asm_verify_wanted,
     _stinky_out,
     _verify_stinky_asm_comment_vs_elf_text,
+    copyStaticFiles,
     libraryDir,
     libraryRoot,
     memCompress,

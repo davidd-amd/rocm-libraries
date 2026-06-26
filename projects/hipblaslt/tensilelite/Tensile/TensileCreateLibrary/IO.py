@@ -35,14 +35,17 @@ from __future__ import annotations
 
 import os
 import pickle
+import shutil
 import zlib
 
 from pathlib import Path
 from typing import Collection, List, Union
 
+from Tensile import SOURCE_PATH
 from Tensile.Common import CHeader, IsaVersion, printExit
 from Tensile.Common.Architectures import isaToGfx
 from Tensile.Common.GlobalParameters import globalParameters
+from Tensile.Utilities.Decorators.Timing import timing
 from Tensile.verify_stinky_comment_vs_elf_text import verify_stinky_paths
 
 
@@ -198,6 +201,23 @@ def writeHelpers(
                 print("*** warning: invalid kernel#%u" % kernelName)
             HeaderText += ko.getHeaderFileString()
         kernelHeaderFile.write(HeaderText)
+
+
+@timing
+def copyStaticFiles(outputPath):
+    libraryStaticFiles = [
+        "TensileTypes.h",
+        "tensile_bfloat16.h",
+        "tensile_float8_bfloat8.h",
+        "KernelHeader.h",
+        "ReductionTemplate.h",
+        "memory_gfx.h",
+    ]
+
+    for fileName in libraryStaticFiles:
+        shutil.copy(os.path.join(SOURCE_PATH, fileName), outputPath)
+
+    return libraryStaticFiles
 
 
 from .Run import KernelCodeGenResult, KernelMinResult

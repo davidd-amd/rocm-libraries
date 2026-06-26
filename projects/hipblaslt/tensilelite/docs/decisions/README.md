@@ -42,3 +42,4 @@ record's **History** section. Use the template below.
 - [0009 — Extract generateKernelObjectsFromSolutions to Logic.py](0009-extract-generatekernelobjects-to-logic.md)
 - [0010 — Extract validity-pruning + post-kernel-to-solution to Tuning.py](0010-extract-validity-pruning-to-tuning.md)
 - [0011 — Extract writeAssembly + writeHelpers to IO.py](0011-extract-write-primitives-to-io.md)
+- [0012 — Extract copyStaticFiles to IO.py](0012-extract-copystaticfiles-to-io.md)
