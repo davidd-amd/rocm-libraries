@@ -129,71 +129,6 @@ def processKernelSource(kernelWriterAssembly, data, outOptions, splitGSU, kernel
         pgr, kernel["MathClocksUnrolledLoop"]
     )
 
-def _checkInvalidSolutionsAndKernels(errorTolerant, result, kernel):
-    if result.err != 0:
-        if not errorTolerant:
-            print(
-                "\nKernel generation failed for kernel: {}".format(
-                    kernel["SolutionIndex"]
-                )
-            )
-            print(kernel["SolutionNameMin"])
-        return True
-    return False
-
-def _checkInvalidSolutions(splitGSU, removeKernelNames, solutions):
-    invalids = []
-    for solution in solutions:
-        solutionKernels = solution.getKernels()
-        for kernel in solutionKernels:
-            kName = getKeyNoInternalArgs(kernel, splitGSU)
-            if kName in removeKernelNames:
-                invalids.append(True)
-                break
-        invalids.append(False)
-    return invalids
-
-def removeInvalidSolutionsAndKernels(results, kernels, solutions, errorTolerant, printLevel: bool, splitGSU: bool):
-    removeKernelsAndResultsFlag = ParallelMap2(functools.partial(_checkInvalidSolutionsAndKernels, errorTolerant),
-                                               zip(results, kernels), "check invalid kernels and results", return_as="list")
-
-    if any(removeKernelsAndResultsFlag) and not errorTolerant:
-        printExit("** kernel generation failure **")
-
-    removeKernelNames = {getKeyNoInternalArgs(kernel, splitGSU) for invalid, kernel in zip(removeKernelsAndResultsFlag, kernels) if invalid}
-    kernels[:] = [kernel for invalid, kernel in zip(removeKernelsAndResultsFlag, kernels) if not invalid]
-
-    removeSolutionsFlag = []
-    for solution in (
-        tqdm(solutions, "Finding invalid solutions")
-        if printLevel > 1
-        else solutions
-    ):
-        solutionKernels = solution.getKernels()
-        flag = False
-        for kernel in solutionKernels:
-            kName = getKeyNoInternalArgs(kernel, splitGSU)
-            if kName in removeKernelNames:
-                flag = True
-                break
-        removeSolutionsFlag.append(flag)
-
-    solutions[:] = [solut for invalid, solut in zip(removeSolutionsFlag, solutions) if not invalid]
-    results[:] = [rel for invalid, rel in zip(removeKernelsAndResultsFlag, results) if not invalid]
-
-def passPostKernelInfoToSolution(results, kernels, solutions, splitGSU: bool):
-    resultDict = {}
-    for kernIdx, r in enumerate(results):
-        kName = getKernelNameMin(kernels[kernIdx], splitGSU)
-        resultDict["%s"%kName] = r
-    for solution in solutions:
-        solutionKernels = solution.getKernels()
-        for kernel in solutionKernels:
-            kName = getKernelNameMin(kernel, splitGSU)
-            result = resultDict["%s"%kName]
-            solution._state["CUOccupancy"] = result.cuoccupancy
-            solution._state["PrefetchGlobalRead"] = result.pgr
-            solution._state["MathClocksUnrolledLoop"] = result.mathclk
 
 def passPostKernelInfoToLibrary(results, kernels, masterLibraries, splitGSU: bool):
     resultDict = {}
@@ -974,4 +909,10 @@ from .Logic import (
     _renameFallbackPlaceholders,
     generateKernelObjectsFromSolutions,
     renameFallbacksPerArch,
+)
+from .Tuning import (
+    _checkInvalidSolutions,
+    _checkInvalidSolutionsAndKernels,
+    passPostKernelInfoToSolution,
+    removeInvalidSolutionsAndKernels,
 )

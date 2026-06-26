@@ -40,3 +40,4 @@ record's **History** section. Use the template below.
 - [0007 — Extract mem-compression helpers to IO.py](0007-extract-mem-compression-to-io.md)
 - [0008 — Extract fallback-rename helpers to Logic.py](0008-extract-fallback-rename-to-logic.md)
 - [0009 — Extract generateKernelObjectsFromSolutions to Logic.py](0009-extract-generatekernelobjects-to-logic.md)
+- [0010 — Extract validity-pruning + post-kernel-to-solution to Tuning.py](0010-extract-validity-pruning-to-tuning.md)
