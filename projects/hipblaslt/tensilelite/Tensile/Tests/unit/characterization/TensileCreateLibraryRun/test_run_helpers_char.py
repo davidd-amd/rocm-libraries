@@ -207,3 +207,82 @@ def test_rename_fallbacks_per_arch():
     assert "y_plain" in m.lazyLibraries
     # the deep-copied tree's placeholder was arch-suffixed
     assert m.library.rows[0]["library"].filenamePrefix == "tree_fallback_gfx942"
+
+
+# ---------------------------------------------------------------------------
+# passPostKernelInfoToLibrary  (NBA-0c pin: previously only patch.object'd
+# to a no-op in test_r7 with zero behavioral assertion; pin real write-back
+# before it is extracted to Tuning.py)
+# ---------------------------------------------------------------------------
+def _lib_state(**over):
+    s = {
+        "PrefetchGlobalRead": 1,
+        "NonTemporalA": 2,
+        "NonTemporalB": 3,
+        "NonTemporalD": 4,
+        "WaveSeparateGlobalReadA": 5,
+        "WaveSeparateGlobalReadB": 6,
+        "UnrollLoopSwapGlobalReadOrder": 7,
+        "DirectToVgprA": 1,
+        "DirectToVgprB": 0,
+    }
+    s.update(over)
+    return s
+
+
+def _lib_sol(kernel_name, state):
+    orig = _Sol([{"name": kernel_name}], state=state)
+    return SimpleNamespace(originalSolution=orig, sizeMapping=SimpleNamespace())
+
+
+def test_pass_post_kernel_info_to_library_writes_master_and_lazy(monkeypatch):
+    monkeypatch.setattr(M, "getKernelFileBase", lambda split, k: k["name"])
+    results = [SimpleNamespace(cuoccupancy=100, mathclk=200)]
+    kernels = [{"name": "k0"}]
+    main_sol = _lib_sol("k0", _lib_state(AdaptiveGemmNTAB=9))
+    lazy_sol = _lib_sol("k0", _lib_state(NonTemporalD=42))
+    master = SimpleNamespace(
+        solutions={0: main_sol},
+        lazyLibraries={"libZ": SimpleNamespace(solutions={0: lazy_sol})},
+    )
+    M.passPostKernelInfoToLibrary(results, kernels, {"gfx942": master}, splitGSU=False)
+
+    assert main_sol.sizeMapping.CUOccupancy == 100
+    assert main_sol.sizeMapping.MathClocksUnrolledLoop == 200
+    assert main_sol.sizeMapping.PrefetchGlobalRead == 1
+    assert main_sol.sizeMapping.NonTemporalA == 2
+    assert main_sol.sizeMapping.NonTemporalB == 3
+    assert main_sol.sizeMapping.NonTemporalD == 4
+    assert main_sol.sizeMapping.WaveSeparateGlobalReadA == 5
+    assert main_sol.sizeMapping.WaveSeparateGlobalReadB == 6
+    assert main_sol.sizeMapping.UnrollLoopSwapGlobalReadOrder == 7
+    assert main_sol.sizeMapping.adaptiveGemmNTAB == 9
+    assert main_sol.sizeMapping.DirectToVgprA is True
+    assert main_sol.sizeMapping.DirectToVgprB is False
+    # lazy library solutions get the same write-back
+    assert lazy_sol.sizeMapping.CUOccupancy == 100
+    assert lazy_sol.sizeMapping.MathClocksUnrolledLoop == 200
+    assert lazy_sol.sizeMapping.NonTemporalD == 42
+
+
+def test_pass_post_kernel_info_to_library_adaptive_defaults_zero(monkeypatch):
+    monkeypatch.setattr(M, "getKernelFileBase", lambda split, k: k["name"])
+    results = [SimpleNamespace(cuoccupancy=1, mathclk=2)]
+    kernels = [{"name": "k0"}]
+    sol = _lib_sol("k0", _lib_state())  # no AdaptiveGemmNTAB key
+    master = SimpleNamespace(solutions={0: sol}, lazyLibraries={})
+    M.passPostKernelInfoToLibrary(results, kernels, {"gfx942": master}, splitGSU=False)
+    assert sol.sizeMapping.adaptiveGemmNTAB == 0
+
+
+def test_pass_post_kernel_info_to_library_keyerror_diagnostic(monkeypatch, capsys):
+    monkeypatch.setattr(M, "getKernelFileBase", lambda split, k: k["name"])
+    results = [SimpleNamespace(cuoccupancy=1, mathclk=2)]
+    kernels = [{"name": "k0"}]
+    sol = _lib_sol("MISSING", _lib_state())  # kernel not present in resultDict
+    master = SimpleNamespace(solutions={3: sol}, lazyLibraries={})
+    with pytest.raises(KeyError):
+        M.passPostKernelInfoToLibrary(results, kernels, {"gfx942": master}, splitGSU=False)
+    out = capsys.readouterr().out
+    assert "KeyError in masterLibrary.solutions" in out
+    assert "MISSING" in out
