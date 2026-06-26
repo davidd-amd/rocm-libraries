@@ -52,3 +52,9 @@ Tensile/Tests/unit` once per stage against the re-confirmed develop baseline
 **History (updates only):**
 - 2026-06-26 — initial record (NBA-0). Subsequent NBA-* commits append their
   per-issue decision + green proof here or supersede with a focused ADR.
+- 2026-06-26 — NBA-0b: confirmed full-suite baseline on this untouched
+  worktree via `tox -e unit -- -m unit Tensile/Tests/unit` =
+  **4974 passed, 220 skipped, 0 failed** (753 syrupy snapshots passed; 16
+  benign codegen warnings) in 372s. This supersedes the stale DECISIONS.md
+  D15 figure (2466/201), which under-counted by ~2x; 4974/220 is the
+  immutable baseline NBA-15 compares against. No production code changed.
