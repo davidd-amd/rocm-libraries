@@ -18,6 +18,7 @@ import pytest
 pytestmark = pytest.mark.unit
 
 M = importlib.import_module("Tensile.TensileCreateLibrary.Run")
+IO = importlib.import_module("Tensile.TensileCreateLibrary.IO")
 SL = importlib.import_module("Tensile.SolutionLibrary")
 
 
@@ -54,19 +55,19 @@ def test_kernel_min_result_fields():
 # ---------------------------------------------------------------------------
 def test_stinky_wanted_true(monkeypatch):
     monkeypatch.setitem(M.globalParameters, "CheckASMCodeSize", True)
-    monkeypatch.setattr(M, "isaToGfx", lambda isa: "gfx1250")
+    monkeypatch.setattr(IO, "isaToGfx", lambda isa: "gfx1250")
     assert M._stinky_asm_verify_wanted((12, 5, 0)) is True
 
 
 def test_stinky_wanted_false_flag_off(monkeypatch):
     monkeypatch.setitem(M.globalParameters, "CheckASMCodeSize", False)
-    monkeypatch.setattr(M, "isaToGfx", lambda isa: "gfx1250")
+    monkeypatch.setattr(IO, "isaToGfx", lambda isa: "gfx1250")
     assert M._stinky_asm_verify_wanted((12, 5, 0)) is False
 
 
 def test_stinky_wanted_false_other_arch(monkeypatch):
     monkeypatch.setitem(M.globalParameters, "CheckASMCodeSize", True)
-    monkeypatch.setattr(M, "isaToGfx", lambda isa: "gfx942")
+    monkeypatch.setattr(IO, "isaToGfx", lambda isa: "gfx942")
     assert M._stinky_asm_verify_wanted((9, 0, 10)) is False
 
 

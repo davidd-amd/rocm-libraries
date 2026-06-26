@@ -50,6 +50,7 @@ pytestmark = pytest.mark.unit
 # Module imports (deferred so rocisa import happens only once per process)
 # ---------------------------------------------------------------------------
 M = importlib.import_module("Tensile.TensileCreateLibrary.Run")
+IO = importlib.import_module("Tensile.TensileCreateLibrary.IO")
 SL = importlib.import_module("Tensile.SolutionLibrary")
 
 _DATA_DIR = Path(__file__).parent / "data"
@@ -94,19 +95,19 @@ class TestStinkyAsmVerifyWanted:
     def test_false_when_check_disabled(self, monkeypatch):
         """Line 157: returns False when CheckASMCodeSize is falsy."""
         monkeypatch.setitem(M.globalParameters, "CheckASMCodeSize", False)
-        monkeypatch.setattr(M, "isaToGfx", lambda _isa: "gfx1250")
+        monkeypatch.setattr(IO, "isaToGfx", lambda _isa: "gfx1250")
         assert M._stinky_asm_verify_wanted((12, 5, 0)) is False
 
     def test_false_when_not_gfx1250(self, monkeypatch):
         """Line 157: returns False for non-gfx1250 arch even if flag is set."""
         monkeypatch.setitem(M.globalParameters, "CheckASMCodeSize", True)
-        monkeypatch.setattr(M, "isaToGfx", lambda _isa: "gfx942")
+        monkeypatch.setattr(IO, "isaToGfx", lambda _isa: "gfx942")
         assert M._stinky_asm_verify_wanted((9, 4, 2)) is False
 
     def test_true_when_gfx1250_and_flag_set(self, monkeypatch):
         """Line 157: returns True only for gfx1250 with flag on."""
         monkeypatch.setitem(M.globalParameters, "CheckASMCodeSize", True)
-        monkeypatch.setattr(M, "isaToGfx", lambda _isa: "gfx1250")
+        monkeypatch.setattr(IO, "isaToGfx", lambda _isa: "gfx1250")
         assert M._stinky_asm_verify_wanted((12, 5, 0)) is True
 
 
@@ -132,8 +133,8 @@ class TestVerifyStinkyAsmCommentVsElfText:
 
     def test_code2_calls_printExit(self, monkeypatch, tmp_path):
         """Lines 195-196: code==2 triggers printExit (verifier error)."""
-        monkeypatch.setattr(M, "verify_stinky_paths", lambda s, o: (2, "", "err"))
-        monkeypatch.setattr(M, "_stinky_out", lambda msg: None)
+        monkeypatch.setattr(IO, "verify_stinky_paths", lambda s, o: (2, "", "err"))
+        monkeypatch.setattr(IO, "_stinky_out", lambda msg: None)
         with pytest.raises(SystemExit):
             M._verify_stinky_asm_comment_vs_elf_text(
                 tmp_path / "k.s", tmp_path / "k.o", "k"
@@ -141,8 +142,8 @@ class TestVerifyStinkyAsmCommentVsElfText:
 
     def test_code1_calls_printExit(self, monkeypatch, tmp_path):
         """Lines 197-200: code==1 triggers printExit (mismatch)."""
-        monkeypatch.setattr(M, "verify_stinky_paths", lambda s, o: (1, "", ""))
-        monkeypatch.setattr(M, "_stinky_out", lambda msg: None)
+        monkeypatch.setattr(IO, "verify_stinky_paths", lambda s, o: (1, "", ""))
+        monkeypatch.setattr(IO, "_stinky_out", lambda msg: None)
         with pytest.raises(SystemExit):
             M._verify_stinky_asm_comment_vs_elf_text(
                 tmp_path / "k.s", tmp_path / "k.o", "k"
@@ -151,8 +152,8 @@ class TestVerifyStinkyAsmCommentVsElfText:
     def test_code0_ok_stinky_logged(self, monkeypatch, tmp_path):
         """Lines 201-207: code==0 with 'OK STINKY' emits match log."""
         logged = []
-        monkeypatch.setattr(M, "verify_stinky_paths", lambda s, o: (0, "OK STINKY match", ""))
-        monkeypatch.setattr(M, "_stinky_out", lambda msg: logged.append(msg))
+        monkeypatch.setattr(IO, "verify_stinky_paths", lambda s, o: (0, "OK STINKY match", ""))
+        monkeypatch.setattr(IO, "_stinky_out", lambda msg: logged.append(msg))
         M._verify_stinky_asm_comment_vs_elf_text(
             tmp_path / "k.s", tmp_path / "k.o", "myk"
         )
@@ -161,10 +162,10 @@ class TestVerifyStinkyAsmCommentVsElfText:
     def test_exception_in_verifier_calls_printExit(self, monkeypatch, tmp_path):
         """Lines 186-188: exception inside verify_stinky_paths triggers printExit."""
         monkeypatch.setattr(
-            M, "verify_stinky_paths",
+            IO, "verify_stinky_paths",
             lambda s, o: (_ for _ in ()).throw(RuntimeError("fail"))
         )
-        monkeypatch.setattr(M, "_stinky_out", lambda msg: None)
+        monkeypatch.setattr(IO, "_stinky_out", lambda msg: None)
         with pytest.raises(SystemExit):
             M._verify_stinky_asm_comment_vs_elf_text(
                 tmp_path / "k.s", tmp_path / "k.o", "k"
@@ -173,8 +174,8 @@ class TestVerifyStinkyAsmCommentVsElfText:
     def test_out_s_and_err_s_logged(self, monkeypatch, tmp_path):
         """Lines 189-193: out_s and err_s lines are forwarded through _stinky_out."""
         logged = []
-        monkeypatch.setattr(M, "verify_stinky_paths", lambda s, o: (0, "out line", "err line"))
-        monkeypatch.setattr(M, "_stinky_out", lambda msg: logged.append(msg))
+        monkeypatch.setattr(IO, "verify_stinky_paths", lambda s, o: (0, "out line", "err line"))
+        monkeypatch.setattr(IO, "_stinky_out", lambda msg: logged.append(msg))
         M._verify_stinky_asm_comment_vs_elf_text(
             tmp_path / "k.s", tmp_path / "k.o", "k"
         )
