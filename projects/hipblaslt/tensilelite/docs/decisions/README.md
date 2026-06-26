@@ -49,3 +49,4 @@ record's **History** section. Use the template below.
 - [0016 — Extract writeSolutionsAndKernels (public emitter) to Tuning.py](0016-extract-legacy-emitter-to-tuning.md)
 - [0017 — Placement of generateKernelHelperObjects (keep in Run.py)](0017-helper-objects-placement.md)
 - [0018 — Slim Run.py to orchestration core + back-imports](0018-slim-run-orchestration-core.md)
+- [0019 — Consumer-import cleanup: keep the Run back-import shims](0019-consumer-import-cleanup.md)
