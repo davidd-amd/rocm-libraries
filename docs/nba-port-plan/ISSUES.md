@@ -8,7 +8,7 @@ Recover the `nba-final` layered decomposition of `TensileCreateLibrary` (slim `R
 
 ## Strategy
 
-Synthesis of proposals 1 and 3 (proposal 2 is a stub, discarded). Port nba-final's layered decomposition (IO.py / Logic.py / Tuning.py + slim Run.py) onto develop's 1138-LOC Run.py using strict extract-then-reexport: every extraction commit moves a cohesive symbol group to a new sibling module AND in the SAME commit adds `from .NewModule import <names>` back into Run.py, so `import_module('Tensile.TensileCreateLibrary.Run').<sym>`, the harness `from ...Run import <sym>` chokepoint, the __init__ facade re-exports, and the __main__.run attr all keep resolving at every atomic commit (RULES A/B/F by construction). VERIFIED load-bearing facts: __init__.py re-exports exactly 6 names from .Run; ClientWriter/BenchmarkProblems/GenerateSummations import those names from the PACKAGE ROOT (.TensileCreateLibrary), which is never touched; _codegen+LocalRead harnesses import generateKernelObjectsFromSolutions/generateKernelHelperObjects/processKernelSource via `from Tensile.TensileCreateLibrary.Run import` (positional chokepoint, RULE G); run() calls writeSolutionsAndKernelsTCL (line 1036) and passPostKernelInfoToLibrary (line 1065) — TCL is the LIVE emitter, not the non-TCL public one. Two contradictions between the source proposals are resolved in favor of never-break-the-build: (1) proposal 1 MISSED that passPostKernelInfoToLibrary is only ever patch.object'd no-op (zero behavioral assertion) — I adopt proposal 3's hard Stage-0 pin (NBA-1) and make NBA-14 depend on it; (2) the RULE D stinky/LibraryIO monkeypatch landmine: proposal 3's NBA-6 wrongly claims tests stay green because Run keeps the import, but a moved function resolves free vars in ITS OWN module namespace, so monkeypatch.setattr(M, 'verify_stinky_paths'/'_stinky_out'/'isaToGfx') and setattr(M.LibraryIO,'write') would silently no-op once the function lives in IO/Logic. VERIFIED: orchestration test patches M.verify_stinky_paths, M._stinky_out, M.isaToGfx, M.globalParameters, M.LibraryIO.write. Resolution: extractions that move a function reading a monkeypatched global RETARGET those monkeypatches to the new module in the SAME commit (RULE C explicitly permits same-commit test edits for a move), and Run.py retains the top-level os/shutil/LibraryIO/globalParameters imports for any patch target still read by an in-Run function. The shared NamedTuple/worker contract (KernelCodeGenResult, KernelMinResult, processKernelSource, generateKernelHelperObjects) STAYS defined in Run.py with the back-import block at the BOTTOM (after the type defs) so IO/Tuning can `from .Run import` them acyclically. Parallelism: after the Stage-0 pins and a single module-scaffold commit, the leaf groups (path->IO, stinky->IO, mem->IO, kernel-objects->Logic, fallback-rename->Logic) extract concurrently (disjoint Run line ranges, disjoint test files); the two emitters and the post-kernel passes serialize on Tuning.py and the contract. Per-commit gate = import-smoke (python -c 'import Tensile.TensileCreateLibrary as m; m.run') run FIRST, then the named char suite; full `tox -e unit -- -m unit` once per stage against the confirmed develop baseline (DECISIONS.md D15: 2466 passed / 201 skipped — re-confirmed before trusting any delta).
+Synthesis of proposals 1 and 3 (proposal 2 is a stub, discarded). Port nba-final's layered decomposition (IO.py / Logic.py / Tuning.py + slim Run.py) onto develop's 1138-LOC Run.py using strict extract-then-reexport: every extraction commit moves a cohesive symbol group to a new sibling module AND in the SAME commit adds `from .NewModule import <names>` back into Run.py, so `import_module('Tensile.TensileCreateLibrary.Run').<sym>`, the harness `from ...Run import <sym>` chokepoint, the __init__ facade re-exports, and the __main__.run attr all keep resolving at every atomic commit (RULES A/B/F by construction). VERIFIED load-bearing facts: __init__.py re-exports exactly 6 names from .Run; ClientWriter/BenchmarkProblems/GenerateSummations import those names from the PACKAGE ROOT (.TensileCreateLibrary), which is never touched; _codegen+LocalRead harnesses import generateKernelObjectsFromSolutions/generateKernelHelperObjects/processKernelSource via `from Tensile.TensileCreateLibrary.Run import` (positional chokepoint, RULE G); run() calls writeSolutionsAndKernelsTCL (line 1036) and passPostKernelInfoToLibrary (line 1065) — TCL is the LIVE emitter, not the non-TCL public one. Two contradictions between the source proposals are resolved in favor of never-break-the-build: (1) proposal 1 MISSED that passPostKernelInfoToLibrary is only ever patch.object'd no-op (zero behavioral assertion) — I adopt proposal 3's hard Stage-0 pin (NBA-0c) and make NBA-10 depend on it; (2) the RULE D stinky/LibraryIO monkeypatch landmine: proposal 3's NBA-6 wrongly claims tests stay green because Run keeps the import, but a moved function resolves free vars in ITS OWN module namespace, so monkeypatch.setattr(M, 'verify_stinky_paths'/'_stinky_out'/'isaToGfx') and setattr(M.LibraryIO,'write') would silently no-op once the function lives in IO/Logic. VERIFIED: orchestration test patches M.verify_stinky_paths, M._stinky_out, M.isaToGfx, M.globalParameters, M.LibraryIO.write. Resolution: extractions that move a function reading a monkeypatched global RETARGET those monkeypatches to the new module in the SAME commit (RULE C explicitly permits same-commit test edits for a move), and Run.py retains the top-level os/shutil/LibraryIO/globalParameters imports for any patch target still read by an in-Run function. The shared NamedTuple/worker contract (KernelCodeGenResult, KernelMinResult, processKernelSource, generateKernelHelperObjects) STAYS defined in Run.py with the back-import block at the BOTTOM (after the type defs) so IO/Tuning can `from .Run import` them acyclically. Parallelism: after the Stage-0 pins and a single module-scaffold commit, the leaf groups (path->IO, stinky->IO, mem->IO, kernel-objects->Logic, fallback-rename->Logic) extract concurrently (disjoint Run line ranges, disjoint test files); the two emitters and the post-kernel passes serialize on Tuning.py and the contract. Per-commit gate = import-smoke (python -c 'import Tensile.TensileCreateLibrary as m; m.run') run FIRST, then the named char suite; full `tox -e unit -- -m unit` once per stage against the CONFIRMED develop baseline = **4974 passed / 220 skipped / 0 failed** (NBA-0b, this worktree; supersedes the stale DECISIONS.md D15 figure 2466/201, which under-counted ~2x).
 
 ## Invariant: every commit stays green
 
@@ -17,7 +17,7 @@ From projects/hipblaslt/tensilelite: (1) export ROCM_PATH=${ROCM_PATH:-/opt/rocm
 **Test gate commands:**
 
 ```
-(a) IMPORT SMOKE — rocisa is a HIP-linked nanobind ext, so its .so needs the ROCm runtime on the loader path or import aborts (the tox envs set this for you):  cd projects/hipblaslt/tensilelite && export ROCM_PATH=${ROCM_PATH:-/opt/rocm} && export LD_LIBRARY_PATH=$ROCM_PATH/lib:$LD_LIBRARY_PATH && pip install ./rocisa/ && PYTHONPATH=$PWD python -c \"import rocisa, Tensile, Tensile.TensileCreateLibrary; from Tensile.TensileCreateLibrary import run; print('import-smoke OK')\"   (prefer ldconfig-registered /opt/rocm/lib in the dev image so no LD_LIBRARY_PATH is needed — see memory rocm-image-ldconfig-requirement). (b) CHARACTERIZATION / UNIT SUITE — fast, no client build, the tox env already exports ROCM_PATH + LD_LIBRARY_PATH and pip-installs rocisa:  tox -e unit -- -m unit Tensile/Tests/unit   To scope to affected modules only, pass dirs:  tox -e unit -- Tensile/Tests/unit/characterization/<Module>/ {posargs}   For coverage of a single module use the dedicated env (NEVER point --cov at a bare module path): tox -e coverage-unit -- Tensile/Tests/unit/characterization/<Module>/ . COVERAGE GOTCHA: pytest-cov with a --cov arg that resolves to a file/non-dir triggers a rocisa nanobind double-import -> SIGABRT; always pass --cov=Tensile (a package/dir), which is what coverage-unit does. Full no-regression gate (run once per batch, not per commit): tox -e unit -- -m unit Tensile/Tests/unit  expecting the established green count (DECISIONS.md D15 baseline 2466 passed / 201 skipped for full -m unit; confirm current baseline before trusting a delta).
+(a) IMPORT SMOKE — rocisa is a HIP-linked nanobind ext, so its .so needs the ROCm runtime on the loader path or import aborts (the tox envs set this for you):  cd projects/hipblaslt/tensilelite && export ROCM_PATH=${ROCM_PATH:-/opt/rocm} && export LD_LIBRARY_PATH=$ROCM_PATH/lib:$LD_LIBRARY_PATH && pip install ./rocisa/ && PYTHONPATH=$PWD python -c \"import rocisa, Tensile, Tensile.TensileCreateLibrary; from Tensile.TensileCreateLibrary import run; print('import-smoke OK')\"   (prefer ldconfig-registered /opt/rocm/lib in the dev image so no LD_LIBRARY_PATH is needed — see memory rocm-image-ldconfig-requirement). (b) CHARACTERIZATION / UNIT SUITE — fast, no client build, the tox env already exports ROCM_PATH + LD_LIBRARY_PATH and pip-installs rocisa:  tox -e unit -- -m unit Tensile/Tests/unit   To scope to affected modules only, pass dirs:  tox -e unit -- Tensile/Tests/unit/characterization/<Module>/ {posargs}   For coverage of a single module use the dedicated env (NEVER point --cov at a bare module path): tox -e coverage-unit -- Tensile/Tests/unit/characterization/<Module>/ . COVERAGE GOTCHA: pytest-cov with a --cov arg that resolves to a file/non-dir triggers a rocisa nanobind double-import -> SIGABRT; always pass --cov=Tensile (a package/dir), which is what coverage-unit does. Full no-regression gate (run once per batch, not per commit): tox -e unit -- -m unit Tensile/Tests/unit  expecting the CONFIRMED green count = 4974 passed / 220 skipped / 0 failed (NBA-0b, this worktree). The stale DECISIONS.md D15 figure (2466/201) under-counted ~2x and must NOT be used as the gate.
 ```
 
 ## Import-stability rules (the backbone)
@@ -31,6 +31,7 @@ From projects/hipblaslt/tensilelite: (1) export ROCM_PATH=${ROCM_PATH:-/opt/rocm
 7. RULE F (__main__ + bin entry): __main__.py does 'from Tensile.TensileCreateLibrary import run' and TensileLogicRun/test_tensile_logic_char.py asserts __main__ has attr 'run'. The package must keep a top-level callable 'run'. The bin/TensileCreateLibrary entry (referenced by ClientWriter.py:283, GenerateSummations.py:54, Tensile/cmake/TensileConfig.cmake, cmake/tensilelite_auto_build.cmake) drives this path; keep the console-script/module entry intact.
 8. RULE G (codegen harness is a shared chokepoint): _codegen/codegen_harness.py and _codegen/config_harness.py import generateKernelObjectsFromSolutions, generateKernelHelperObjects, processKernelSource and are imported transitively by the _codegen/test_r* and LocalRead/test_r3 suites. Breaking any of these 3 functions' signatures cascades across the whole _codegen + LocalRead family. processKernelSource's signature (kernelWriterAssembly, data, outOptions, splitGSU, kernel, compress=False) -> KernelCodeGenResult is depended on positionally.
 9. RULE H (per-commit verification): the green-build invariant is that 'import Tensile.TensileCreateLibrary; import Tensile.TensileCreateLibrary.Run; import Tensile.TensileCreateLibrary.__main__' succeeds AND pytest collects without ImportError for test_library_paths.py, test_perArchFallbackRename.py, characterization/TensileCreateLibraryRun, characterization/ParseArguments, characterization/_codegen, and characterization/LocalRead. Run this after each commit of the port, not only at the end.
+10. RULE I (back-import placement — ONE precise mechanical rule, supersedes every looser phrasing like "near the bottom of the import block" or "after the KernelMinResult def"): ALL sibling-module back-imports live in a SINGLE contiguous block at the END of Run.py, AFTER the `def run():` body (i.e. at EOF). Rationale: every back-imported name is only ever CALLED at runtime (inside a function body), never referenced at module-load time, so importing them last is safe; and by EOF all four shared-contract names (KernelCodeGenResult @132, KernelMinResult @144, processKernelSource @216, generateKernelHelperObjects @699) are already bound, so when the EOF block runs `from .IO/.Tuning import ...` — which transitively triggers IO/Tuning's `from .Run import KernelMinResult/KernelCodeGenResult/processKernelSource` — those resolve against a fully-defined (partially-initialized only w.r.t. the back-imports themselves) Run module. The cycle is broken by this ordering. Each issue APPENDS its `from .NewModule import <names>` line(s) to this one EOF block, one logical import per issue (one name per line to keep concurrent group-D appends conflict-free). import-smoke (`python -c 'import Tensile.TensileCreateLibrary.Run'`) is the FIRST gate after any commit that touches this block.
 
 ## Build hooks that must keep resolving
 
@@ -64,7 +65,7 @@ From projects/hipblaslt/tensilelite: (1) export ROCM_PATH=${ROCM_PATH:-/opt/rocm
 - _checkInvalidSolutions is dead but test-bound and NOT deletable per user CLAUDE.md (no deleting dead code outside the active change). NBA-5 extracts it verbatim and flags it in the ADR for the owner.
 - Import-block merge contention: group-D issues (NBA-2/3/4/7) and the emitter stages all append back-import lines to the same region of Run.py. Concurrent edits produce git conflicts in Run.py's import block even though the logic is independent. Mitigation: one back-import per line, append-only; land group-D issues in quick succession rather than literally simultaneously — the file-level independence is in the NEW modules, not in Run.py.
 - libraryDir colon-strip semantics are matched at runtime by tensile_host.cpp with no Python-test signal. NBA-2 must preserve the exact path logic; a 'cleanup' refactor would break the C++ runtime probe silently.
-- Baseline drift: develop merges have historically mass-broken char tests, so the DECISIONS.md D15 figure (2466/201) must be RE-CONFIRMED on the current worktree (NBA-0b) before trusting any delta in NBA-15; a stale baseline could mask or fabricate a regression.
+- Baseline drift: develop merges have historically mass-broken char tests. The baseline has now been RE-CONFIRMED on this worktree (NBA-0b, commit recorded in ADR-0001 History) = 4974 passed / 220 skipped / 0 failed; this is the immutable figure NBA-15 compares against. The DECISIONS.md D15 figure (2466/201) is stale (~2x under-count) and must not be used.
 
 ## ADR home
 
@@ -73,6 +74,23 @@ projects/hipblaslt/tensilelite/docs/decisions/ (a NEW peer to the existing Tensi
 **Filename pattern:** NNNN-kebab-title.md (zero-padded 4-digit monotonic id matching the DECISIONS.md 'Dn' numbering ethos, e.g. 0001-parallel-build-algorithm.md). One ADR file per atomic commit; an ADR UPDATE is an edit to the relevant existing file plus a dated bullet under its History section. This keeps 'every commit ships an ADR or ADR update' lightweight: a new decision = one new short file; a refinement = one appended bullet.
 
 ---
+
+## STATUS (2026-06-26)
+
+Stage 0 is **COMPLETE and committed** on branch `users/davidd-amd/tensilelite-new-build-algo`:
+- NBA-0  (916a38fc0fb) — ADR home + ADR-0001. NOTE: the ADR file is named
+  `0001-tensilecreatelibrary-decomposition.md` (not the `0001-parallel-build-decomposition-strategy.md`
+  proposed below); all "ADR 0001-*" references in this doc mean that file.
+- NBA-0b (1f6fc790cd2) — confirmed baseline **4974/220/0**.
+- NBA-0c (4a6e4824f89) — passPostKernelInfoToLibrary behavioral pin.
+- NBA-0d (a36b5ae842e) — executable import-surface contract.
+- NBA-0e (02ef4a7645b) — TCL return-shape pin + __init__ normalization.
+- ADRs 0002/0003/0004 (a65e0e04c89) — Stage-0 pin rationale.
+
+**NEXT ACTION: NBA-1** (scaffold IO.py/Logic.py/Tuning.py), then Stage 2 extractions.
+Stage-2+ each issue carries a "Direct-call monkeypatch audit" block (see RULE I and the
+per-issue retarget lists) produced by the nba-monkeypatch-audit pass; re-verify Run.py line
+numbers against the live file before each extraction (Run.py shrinks as work proceeds).
 
 ## Issues by stage
 
@@ -87,7 +105,7 @@ Establish the ADR home + per-commit green recipe, and close the two real safety-
 **Summary.** Create projects/hipblaslt/tensilelite/docs/decisions/ (verified absent) and land ADR-0001 documenting the shell-Run extract-then-reexport strategy, the re-import-back invariant (RULES A/B/F), the RULE D monkeypatch-retarget rule, and the per-commit green recipe. Pure docs.
 
 **Files touched:**
-- `projects/hipblaslt/tensilelite/docs/decisions/0001-parallel-build-decomposition-strategy.md`
+- `projects/hipblaslt/tensilelite/docs/decisions/0001-tensilecreatelibrary-decomposition.md`
 
 **Steps:**
 1. Create directory projects/hipblaslt/tensilelite/docs/decisions/ (confirmed it does not exist).
@@ -98,7 +116,7 @@ Establish the ADR home + per-commit green recipe, and close the two real safety-
 
 **Test strategy.** Run import-smoke (python -c 'import Tensile.TensileCreateLibrary as m; m.run') to confirm the baseline is green; no char test is exercised by a docs file.
 
-**ADR action.** new ADR 0001-parallel-build-decomposition-strategy.md
+**ADR action.** new ADR 0001-tensilecreatelibrary-decomposition.md (DONE)
 
 **Acceptance criteria:**
 - [ ] docs/decisions/0001-*.md exists and follows the template
@@ -112,7 +130,7 @@ Establish the ADR home + per-commit green recipe, and close the two real safety-
 **Summary.** Re-run the full no-regression gate on untouched develop and append the confirmed passed/skipped counts to ADR-0001 History as the immutable baseline; do not trust DECISIONS.md D15 (2466/201) blindly given develop merges have historically mass-broken char tests.
 
 **Files touched:**
-- `projects/hipblaslt/tensilelite/docs/decisions/0001-parallel-build-decomposition-strategy.md`
+- `projects/hipblaslt/tensilelite/docs/decisions/0001-tensilecreatelibrary-decomposition.md`
 
 **Steps:**
 1. From projects/hipblaslt/tensilelite, run tox -e unit -- -m unit Tensile/Tests/unit and capture passed/skipped totals.
@@ -255,7 +273,7 @@ Maximum-parallelism leaf extractions. Each issue moves a disjoint cohesive group
 
 **Steps:**
 1. Cut libraryRoot, libraryDir, _baseArchs, tensileLibraryFile (Run.py 87-129) verbatim into IO.py with pathlib.Path / typing imports; preserve signatures and the colon-strip logic.
-2. Add `from .IO import libraryRoot, libraryDir, _baseArchs, tensileLibraryFile` near the bottom of Run.py's import block.
+2. Append `from .IO import libraryRoot, libraryDir, _baseArchs, tensileLibraryFile` to the single EOF back-import block (RULE I), one name per line.
 3. Verify __init__.py still re-exports libraryDir/libraryRoot/tensileLibraryFile from .Run (chain: __init__ -> .Run -> .IO).
 4. Run import-smoke + test_library_paths.py + the NBA-0d surface pin.
 
@@ -395,8 +413,8 @@ Maximum-parallelism leaf extractions. Each issue moves a disjoint cohesive group
 **Steps:**
 1. Cut writeHelpers (390-415; deps os.path, CHeader, KERNEL_HELPER_FILENAME_CPP/H) and writeAssembly (375-388; deps printExit, pathlib.Path, memDecompress, KernelMinResult) into IO.py; writeAssembly calls IO-local memDecompress (from NBA-4).
 2. In IO.py add `from .Run import KernelMinResult`.
-3. Ensure Run.py's KernelMinResult NamedTuple (def ~144) sits ABOVE the `from .IO import writeHelpers, writeAssembly` back-import so IO's `from .Run import KernelMinResult` resolves against the partially-initialized Run module.
-4. Add `from .IO import writeHelpers, writeAssembly` to Run.py after the KernelMinResult def.
+3. Per RULE I the back-import block is at EOF, so KernelMinResult (def @144) is trivially above it; IO's `from .Run import KernelMinResult` resolves against the by-then fully-defined Run when the EOF block triggers IO's import. No mid-file placement needed.
+4. Append `from .IO import writeHelpers, writeAssembly` to the EOF back-import block (RULE I).
 5. Run import-smoke FIRST (cycle proof) then test_r7.
 
 **Build safety.** Acyclic-by-ordering: KernelMinResult defined in Run before Run imports from IO; IO's from .Run import KernelMinResult runs during Run's import after that binding exists. RULE C: writeAssembly/writeHelpers re-imported so M.* resolve. No monkeypatched global moves.
@@ -424,7 +442,7 @@ Maximum-parallelism leaf extractions. Each issue moves a disjoint cohesive group
 **Steps:**
 1. Cut generateKernelObjectsFromSolutions into Logic.py with deps timing decorator, getKeyNoInternalArgs; keep the exact (solutions) -> list signature.
 2. Add `from .Logic import generateKernelObjectsFromSolutions` to Run.py so both M. and the harness `from ...Run import` resolve.
-3. Do NOT move generateKernelHelperObjects here (placement decided in NBA-17).
+3. Do NOT move generateKernelHelperObjects here (placement decided in NBA-14).
 4. Run import-smoke + _codegen harness suites + LocalRead + orchestration char suite.
 
 **Build safety.** RULE G: signature unchanged; the harness `from ...Run import` chokepoint still resolves via the back-import. No monkeypatched global moves.
@@ -548,8 +566,8 @@ Extract the two large emitters into Tuning.py — the highest-fanout, highest-ri
 **Steps:**
 1. Cut writeSolutionsAndKernelsTCL into Tuning.py with its inner assemble/compose closures.
 2. In Tuning.py add `from .IO import libraryRoot, libraryDir, _baseArchs, writeAssembly, writeHelpers, _stinky_asm_verify_wanted, _verify_stinky_asm_comment_vs_elf_text` and `from .Run import processKernelSource, KernelCodeGenResult`; passPostKernelInfoToSolution/removeInvalidSolutionsAndKernels are already Tuning-local (NBA-5).
-3. Order Run so processKernelSource + KernelCodeGenResult are defined ABOVE `from .Tuning import writeSolutionsAndKernelsTCL`; Tuning's from .Run import resolves against the partially-initialized Run (same technique as NBA-7).
-4. Add `from .Tuning import writeSolutionsAndKernelsTCL` to Run.py so run()'s line-1036 call resolves.
+3. Per RULE I the back-import block is at EOF, so processKernelSource (@216) + KernelCodeGenResult (@132) are defined above it; Tuning's `from .Run import processKernelSource, KernelCodeGenResult` resolves when the EOF block triggers Tuning's import.
+4. Append `from .Tuning import writeSolutionsAndKernelsTCL` to the EOF back-import block (RULE I) so run()'s line-1036 call resolves at runtime.
 5. Run import-smoke FIRST (cycle proof) + the NBA-0e TCL pin + r7 deep char suite.
 
 **Build safety.** RULE A + RULE C: test_r7 imports it via M.; re-import keeps it a Run attribute and run()'s in-module call resolves via the back-imported global. Acyclic-by-ordering (processKernelSource/KernelCodeGenResult defined before the back-import). NBA-0e pin verifies the live 3-tuple contract is unchanged. Note: writeSolutionsAndKernelsTCL does NOT itself read a monkeypatched Run global — the stinky helpers it calls are IO-resident and already retargeted in NBA-3.
