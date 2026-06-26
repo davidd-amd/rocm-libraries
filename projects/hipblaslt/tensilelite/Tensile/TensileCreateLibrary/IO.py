@@ -31,6 +31,8 @@ static-file copier. Populated incrementally by the NBA-* decomposition; names
 are re-imported back into Run.py so existing imports keep resolving.
 """
 
+from __future__ import annotations
+
 import os
 import pickle
 import zlib
@@ -38,7 +40,7 @@ import zlib
 from pathlib import Path
 from typing import Collection, List, Union
 
-from Tensile.Common import IsaVersion, printExit
+from Tensile.Common import CHeader, IsaVersion, printExit
 from Tensile.Common.Architectures import isaToGfx
 from Tensile.Common.GlobalParameters import globalParameters
 from Tensile.verify_stinky_comment_vs_elf_text import verify_stinky_paths
@@ -153,3 +155,49 @@ def memCompress(obj):
 
 def memDecompress(byt):
     return pickle.loads(zlib.decompress(byt))
+
+
+def writeAssembly(asmPath: Union[Path, str], result: KernelCodeGenResult):
+    if result.err:
+        printExit(f"Failed to build kernel {result.name} because it has error code {result.err}")
+    path = Path(asmPath) / f"{result.name}.s"
+    isa = result.isa
+    wfsize = result.wavefrontSize
+    with open(path, "w", encoding="utf-8") as f:
+        src = result.src
+        if isinstance(src, bytes):
+            src = memDecompress(src)
+        f.write(src)
+
+    minResult = KernelMinResult(result.err, result.cuoccupancy, result.pgr, result.mathclk)
+    return path, isa, wfsize, minResult
+
+def writeHelpers(
+    outputPath, kernelHelperObjs, KERNEL_HELPER_FILENAME_CPP, KERNEL_HELPER_FILENAME_H
+):
+    kernelSourceFilename = os.path.join(os.path.normcase(outputPath), KERNEL_HELPER_FILENAME_CPP)
+    kernelHeaderFilename = os.path.join(os.path.normcase(outputPath), KERNEL_HELPER_FILENAME_H)
+
+    with open(kernelHeaderFilename, "w", encoding="utf-8") as kernelHeaderFile, open(
+        kernelSourceFilename, "w", encoding="utf-8"
+    ) as kernelSourceFile:
+        kernelSourceFile.write(CHeader)
+        kernelHeaderFile.write(CHeader)
+        kernelSourceFile.write('#include "Kernels.h"\n')
+        kernelHeaderFile.write("#pragma once\n")
+        kernelHeaderFile.write("#include <hip/hip_runtime.h>\n")
+        kernelHeaderFile.write("#include <hip/hip_ext.h>\n\n")
+        kernelHeaderFile.write('#include "KernelHeader.h"\n\n')
+        HeaderText = ""
+        for ko in kernelHelperObjs:
+            kernelName = ko.getKernelName()
+            (err, src) = ko.getSourceFileString()
+
+            kernelSourceFile.write(src)
+            if err:
+                print("*** warning: invalid kernel#%u" % kernelName)
+            HeaderText += ko.getHeaderFileString()
+        kernelHeaderFile.write(HeaderText)
+
+
+from .Run import KernelCodeGenResult, KernelMinResult

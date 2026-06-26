@@ -197,49 +197,6 @@ def passPostKernelInfoToLibrary(results, kernels, masterLibraries, splitGSU: boo
                         print(f"{'='*80}\n")
                         raise
 
-def writeAssembly(asmPath: Union[Path, str], result: KernelCodeGenResult):
-    if result.err:
-        printExit(f"Failed to build kernel {result.name} because it has error code {result.err}")
-    path = Path(asmPath) / f"{result.name}.s"
-    isa = result.isa
-    wfsize = result.wavefrontSize
-    with open(path, "w", encoding="utf-8") as f:
-        src = result.src
-        if isinstance(src, bytes):
-            src = memDecompress(src)
-        f.write(src)
-
-    minResult = KernelMinResult(result.err, result.cuoccupancy, result.pgr, result.mathclk)
-    return path, isa, wfsize, minResult
-
-def writeHelpers(
-    outputPath, kernelHelperObjs, KERNEL_HELPER_FILENAME_CPP, KERNEL_HELPER_FILENAME_H
-):
-    kernelSourceFilename = os.path.join(os.path.normcase(outputPath), KERNEL_HELPER_FILENAME_CPP)
-    kernelHeaderFilename = os.path.join(os.path.normcase(outputPath), KERNEL_HELPER_FILENAME_H)
-
-    with open(kernelHeaderFilename, "w", encoding="utf-8") as kernelHeaderFile, open(
-        kernelSourceFilename, "w", encoding="utf-8"
-    ) as kernelSourceFile:
-        kernelSourceFile.write(CHeader)
-        kernelHeaderFile.write(CHeader)
-        kernelSourceFile.write('#include "Kernels.h"\n')
-        kernelHeaderFile.write("#pragma once\n")
-        kernelHeaderFile.write("#include <hip/hip_runtime.h>\n")
-        kernelHeaderFile.write("#include <hip/hip_ext.h>\n\n")
-        kernelHeaderFile.write('#include "KernelHeader.h"\n\n')
-        HeaderText = ""
-        for ko in kernelHelperObjs:
-            kernelName = ko.getKernelName()
-            (err, src) = ko.getSourceFileString()
-
-            kernelSourceFile.write(src)
-            if err:
-                print("*** warning: invalid kernel#%u" % kernelName)
-            HeaderText += ko.getHeaderFileString()
-        kernelHeaderFile.write(HeaderText)
-
-
 def writeSolutionsAndKernels(
     outputPath,
     asmToolchain,
@@ -904,6 +861,8 @@ from .IO import (
     memCompress,
     memDecompress,
     tensileLibraryFile,
+    writeAssembly,
+    writeHelpers,
 )
 from .Logic import (
     _renameFallbackPlaceholders,
