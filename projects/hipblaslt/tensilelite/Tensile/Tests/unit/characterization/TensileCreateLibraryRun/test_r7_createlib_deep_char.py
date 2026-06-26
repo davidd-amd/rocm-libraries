@@ -54,6 +54,7 @@ pytestmark = pytest.mark.unit
 # ---------------------------------------------------------------------------
 M = importlib.import_module("Tensile.TensileCreateLibrary.Run")
 Logic = importlib.import_module("Tensile.TensileCreateLibrary.Logic")
+Tuning = importlib.import_module("Tensile.TensileCreateLibrary.Tuning")
 SL = importlib.import_module("Tensile.SolutionLibrary")
 
 _DATA_DIR = Path(__file__).parent / "data"
@@ -332,10 +333,10 @@ class TestWriteSolutionsAndKernelsTCL:
         src_tc = MagicMock()
         kwa = MagicMock()
 
-        with patch.object(M, "ParallelMap2", return_value=[]):
-            with patch.object(M, "buildAssemblyCodeObjectFiles", return_value=[]):
-                with patch.object(M, "buildSourceCodeObjectFiles"):
-                    with patch.object(M, "writeHelpers"):
+        with patch.object(Tuning, "ParallelMap2", return_value=[]):
+            with patch.object(Tuning, "buildAssemblyCodeObjectFiles", return_value=[]):
+                with patch.object(Tuning, "buildSourceCodeObjectFiles"):
+                    with patch.object(Tuning, "writeHelpers"):
                         return M.writeSolutionsAndKernelsTCL(
                             tmp_path / "output",
                             asm_tc, src_tc, solutions, kernels,
@@ -370,10 +371,10 @@ class TestWriteSolutionsAndKernelsTCL:
         src_tc = MagicMock()
         kwa = MagicMock()
 
-        with patch.object(M, "ParallelMap2", side_effect=_fake_pm2):
-            with patch.object(M, "buildAssemblyCodeObjectFiles", return_value=[]):
-                with patch.object(M, "buildSourceCodeObjectFiles"):
-                    with patch.object(M, "writeHelpers"):
+        with patch.object(Tuning, "ParallelMap2", side_effect=_fake_pm2):
+            with patch.object(Tuning, "buildAssemblyCodeObjectFiles", return_value=[]):
+                with patch.object(Tuning, "buildSourceCodeObjectFiles"):
+                    with patch.object(Tuning, "writeHelpers"):
                         M.writeSolutionsAndKernelsTCL(
                             tmp_path / "output",
                             asm_tc, src_tc, [], [], [], kwa, ["gfx942"],
@@ -395,11 +396,11 @@ class TestWriteSolutionsAndKernelsTCL:
         kwa = MagicMock()
 
         # Patch getKernelFileBase to return same name for both => k2 is duplicate
-        with patch.object(M, "getKernelFileBase", return_value="same_kernel"):
-            with patch.object(M, "ParallelMap2", return_value=[]):
-                with patch.object(M, "buildAssemblyCodeObjectFiles", return_value=[]):
-                    with patch.object(M, "buildSourceCodeObjectFiles"):
-                        with patch.object(M, "writeHelpers"):
+        with patch.object(Tuning, "getKernelFileBase", return_value="same_kernel"):
+            with patch.object(Tuning, "ParallelMap2", return_value=[]):
+                with patch.object(Tuning, "buildAssemblyCodeObjectFiles", return_value=[]):
+                    with patch.object(Tuning, "buildSourceCodeObjectFiles"):
+                        with patch.object(Tuning, "writeHelpers"):
                             n, uq, results = M.writeSolutionsAndKernelsTCL(
                                 tmp_path / "output2",
                                 asm_tc, src_tc, [], [k1, k2], [], kwa, ["gfx942"],
@@ -428,10 +429,10 @@ class TestWriteSolutionsAndKernelsTCL:
         src_tc = MagicMock()
         kwa = MagicMock()
 
-        with patch.object(M, "ParallelMap2", return_value=[]):
-            with patch.object(M, "buildAssemblyCodeObjectFiles", return_value=[]):
-                with patch.object(M, "buildSourceCodeObjectFiles"):
-                    with patch.object(M, "writeHelpers", side_effect=_spy):
+        with patch.object(Tuning, "ParallelMap2", return_value=[]):
+            with patch.object(Tuning, "buildAssemblyCodeObjectFiles", return_value=[]):
+                with patch.object(Tuning, "buildSourceCodeObjectFiles"):
+                    with patch.object(Tuning, "writeHelpers", side_effect=_spy):
                         M.writeSolutionsAndKernelsTCL(
                             tmp_path / "output",
                             asm_tc, src_tc, [], [], [], kwa, ["gfx942"],

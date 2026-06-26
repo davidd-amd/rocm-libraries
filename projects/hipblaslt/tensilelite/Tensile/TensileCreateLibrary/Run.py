@@ -270,116 +270,6 @@ def writeSolutionsAndKernels(
     return codeObjectFiles, numKernels
 
 
-def writeSolutionsAndKernelsTCL(
-    outputPath,
-    asmToolchain,
-    srcToolchain,
-    solutions,
-    kernels,
-    kernelHelperObjs,
-    kernelWriterAssembly,
-    cmdlineArchs: List[str],
-    disableAsmComments: bool=False,
-    compress: bool=True,
-    removeTemporaries: bool=True
-):
-    outputPath = Path(outputPath)
-    # Builders fan out into <destRoot>/<base-arch>/ at the moment of write.
-    # Pre-create the per-base subdirs so concurrent emit doesn't race mkdir.
-    destRoot = ensurePath(libraryRoot(outputPath))
-    for base in _baseArchs(cmdlineArchs):
-        ensurePath(libraryDir(outputPath, base))
-    buildTmpPath = ensurePath(outputPath / "build_tmp" / outputPath.stem.upper())
-    assemblyTmpPath = ensurePath(
-        buildTmpPath / "assembly"
-    )  # Temp path for generated assembly files (.s)
-    objectTmpPath = ensurePath(
-        buildTmpPath / "code_object_tmp"
-    )  # Temp path for HSA code object files (.hsaco)
-
-    asmKernels = [k for k in kernels if k["KernelLanguage"] == "Assembly"]
-
-    visited = set()
-    duplicates = 0
-    splitGSU = False
-    for k in asmKernels:
-        base = getKernelFileBase(splitGSU, k)
-        k["BaseName"] = base
-        k.duplicate = True if base in visited else False
-        duplicates += k.duplicate
-        print2(f"Duplicate: {base}")
-        visited.add(base)
-    print1(f"Number of duplicate kernels: {duplicates}")
-
-    uniqueAsmKernels = [k for k in asmKernels if not k.duplicate]
-
-    def assemble(ret, removeTemporaries: bool):
-        asmPath, isa, wavefrontsize, result = ret
-        o_path = asmPath.with_suffix(".o")
-        asmToolchain.assembler(isaToGfx(isa), wavefrontsize, str(asmPath), str(o_path))
-        if _stinky_asm_verify_wanted(isa):
-            _verify_stinky_asm_comment_vs_elf_text(asmPath, o_path, asmPath.stem)
-        if removeTemporaries:
-            asmPath.unlink()
-        return result
-
-    unaryAssemble = functools.partial(assemble, removeTemporaries=removeTemporaries)
-
-    outOptions = rocisa.rocIsa.getInstance().getOutputOptions()
-    outOptions.outputNoComment = not disableAsmComments
-
-    memcompress = len(uniqueAsmKernels) > 10000
-    unaryProcessKernelSource = functools.partial(
-        processKernelSource,
-        kernelWriterAssembly,
-        rocisa.rocIsa.getInstance().getData(),
-        outOptions,
-        splitGSU,
-        compress = memcompress,
-    )
-
-    unaryWriteAssembly = functools.partial(writeAssembly, assemblyTmpPath)
-    def compose(assemble, unaryWriteAssembly, unaryProcessKernelSource):
-        def composed_function(kernel):
-            processed_kernel = unaryProcessKernelSource(kernel)
-            written_kernel = unaryWriteAssembly(processed_kernel)
-            assembled_kernel = assemble(written_kernel)
-            return processed_kernel
-        return composed_function
-
-    results = ParallelMap2(
-        compose(unaryAssemble, unaryWriteAssembly, unaryProcessKernelSource),
-        uniqueAsmKernels,
-        "Generating assembly kernels",
-        multiArg=False,
-        return_as="list"
-    )
-
-    buildAssemblyCodeObjectFiles(
-        asmToolchain.linker,
-        asmToolchain.bundler,
-        asmKernels,
-        destRoot,
-        assemblyTmpPath,
-        compress,
-    )
-
-    writeHelpers(outputPath, kernelHelperObjs, KERNEL_HELPER_FILENAME_CPP, KERNEL_HELPER_FILENAME_H)
-    srcKernelFile = Path(outputPath) / "Kernels.cpp"
-
-    buildSourceCodeObjectFiles(
-        srcToolchain.compiler,
-        srcToolchain.bundler,
-        destRoot,
-        objectTmpPath,
-        outputPath,
-        srcKernelFile,
-        cmdlineArchs,
-    )
-
-    return len(uniqueAsmKernels), uniqueAsmKernels, results
-
-
 def generateKernelHelperObjects(solutions: List[Solution], cxxCompiler: str, isaInfoMap):
     """
     Generates a unique list of kernel helpers.
@@ -668,4 +558,5 @@ from .Tuning import (
     passPostKernelInfoToLibrary,
     passPostKernelInfoToSolution,
     removeInvalidSolutionsAndKernels,
+    writeSolutionsAndKernelsTCL,
 )
