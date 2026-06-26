@@ -8,7 +8,7 @@ Recover the `nba-final` layered decomposition of `TensileCreateLibrary` (slim `R
 
 ## Strategy
 
-Synthesis of proposals 1 and 3 (proposal 2 is a stub, discarded). Port nba-final's layered decomposition (IO.py / Logic.py / Tuning.py + slim Run.py) onto develop's 1138-LOC Run.py using strict extract-then-reexport: every extraction commit moves a cohesive symbol group to a new sibling module AND in the SAME commit adds `from .NewModule import <names>` back into Run.py, so `import_module('Tensile.TensileCreateLibrary.Run').<sym>`, the harness `from ...Run import <sym>` chokepoint, the __init__ facade re-exports, and the __main__.run attr all keep resolving at every atomic commit (RULES A/B/F by construction). VERIFIED load-bearing facts: __init__.py re-exports exactly 6 names from .Run; ClientWriter/BenchmarkProblems/GenerateSummations import those names from the PACKAGE ROOT (.TensileCreateLibrary), which is never touched; _codegen+LocalRead harnesses import generateKernelObjectsFromSolutions/generateKernelHelperObjects/processKernelSource via `from Tensile.TensileCreateLibrary.Run import` (positional chokepoint, RULE G); run() calls writeSolutionsAndKernelsTCL (line 1036) and passPostKernelInfoToLibrary (line 1065) — TCL is the LIVE emitter, not the non-TCL public one. Two contradictions between the source proposals are resolved in favor of never-break-the-build: (1) proposal 1 MISSED that passPostKernelInfoToLibrary is only ever patch.object'd no-op (zero behavioral assertion) — I adopt proposal 3's hard Stage-0 pin (NBA-0c) and make NBA-10 depend on it; (2) the RULE D stinky/LibraryIO monkeypatch landmine: proposal 3's NBA-6 wrongly claims tests stay green because Run keeps the import, but a moved function resolves free vars in ITS OWN module namespace, so monkeypatch.setattr(M, 'verify_stinky_paths'/'_stinky_out'/'isaToGfx') and setattr(M.LibraryIO,'write') would silently no-op once the function lives in IO/Logic. VERIFIED: orchestration test patches M.verify_stinky_paths, M._stinky_out, M.isaToGfx, M.globalParameters, M.LibraryIO.write. Resolution: extractions that move a function reading a monkeypatched global RETARGET those monkeypatches to the new module in the SAME commit (RULE C explicitly permits same-commit test edits for a move), and Run.py retains the top-level os/shutil/LibraryIO/globalParameters imports for any patch target still read by an in-Run function. The shared NamedTuple/worker contract (KernelCodeGenResult, KernelMinResult, processKernelSource, generateKernelHelperObjects) STAYS defined in Run.py with the back-import block at the BOTTOM (after the type defs) so IO/Tuning can `from .Run import` them acyclically. Parallelism: after the Stage-0 pins and a single module-scaffold commit, the leaf groups (path->IO, stinky->IO, mem->IO, kernel-objects->Logic, fallback-rename->Logic) extract concurrently (disjoint Run line ranges, disjoint test files); the two emitters and the post-kernel passes serialize on Tuning.py and the contract. Per-commit gate = import-smoke (python -c 'import Tensile.TensileCreateLibrary as m; m.run') run FIRST, then the named char suite; full `tox -e unit -- -m unit` once per stage against the CONFIRMED develop baseline = **4974 passed / 220 skipped / 0 failed** (NBA-0b, this worktree; supersedes the stale DECISIONS.md D15 figure 2466/201, which under-counted ~2x).
+Synthesis of proposals 1 and 3 (proposal 2 is a stub, discarded). Port nba-final's layered decomposition (IO.py / Logic.py / Tuning.py + slim Run.py) onto develop's 1138-LOC Run.py using strict extract-then-reexport: every extraction commit moves a cohesive symbol group to a new sibling module AND in the SAME commit adds `from .NewModule import <names>` back into Run.py, so `import_module('Tensile.TensileCreateLibrary.Run').<sym>`, the harness `from ...Run import <sym>` chokepoint, the __init__ facade re-exports, and the __main__.run attr all keep resolving at every atomic commit (RULES A/B/F by construction). VERIFIED load-bearing facts: __init__.py re-exports exactly 6 names from .Run; ClientWriter/BenchmarkProblems/GenerateSummations import those names from the PACKAGE ROOT (.TensileCreateLibrary), which is never touched; _codegen+LocalRead harnesses import generateKernelObjectsFromSolutions/generateKernelHelperObjects/processKernelSource via `from Tensile.TensileCreateLibrary.Run import` (positional chokepoint, RULE G); run() calls writeSolutionsAndKernelsTCL (line 1036) and passPostKernelInfoToLibrary (line 1065) — TCL is the LIVE emitter, not the non-TCL public one. Two contradictions between the source proposals are resolved in favor of never-break-the-build: (1) proposal 1 MISSED that passPostKernelInfoToLibrary is only ever patch.object'd no-op (zero behavioral assertion) — I adopt proposal 3's hard Stage-0 pin (NBA-0c) and make NBA-10 depend on it; (2) the RULE D stinky/LibraryIO monkeypatch landmine: proposal 3's NBA-6 wrongly claims tests stay green because Run keeps the import, but a moved function resolves free vars in ITS OWN module namespace, so BARE-NAME rebinds monkeypatch.setattr(M, 'verify_stinky_paths'/'_stinky_out'/'isaToGfx') silently no-op once the function lives in IO/Logic and MUST be retargeted. CORRECTION (empirically verified, see "Direct-call monkeypatch audit"): setattr(M.LibraryIO,'write') and setitem(M.globalParameters,...) do NOT no-op — LibraryIO and globalParameters are shared singletons (M.LibraryIO is Logic.LibraryIO; M.globalParameters is IO.globalParameters), so mutating them via M stays visible to the moved function; these need NO retarget (RULE D). Resolution: extractions that move a function RETARGET only the BARE-NAME monkeypatches it reads to the new module in the SAME commit (RULE C), and Run.py retains the top-level os/shutil/LibraryIO/globalParameters imports so the shared-object patches keep resolving via M. The shared NamedTuple/worker contract (KernelCodeGenResult, KernelMinResult, processKernelSource, generateKernelHelperObjects) STAYS defined in Run.py with the back-import block at the BOTTOM (after the type defs) so IO/Tuning can `from .Run import` them acyclically. Parallelism: after the Stage-0 pins and a single module-scaffold commit, the leaf groups (path->IO, stinky->IO, mem->IO, kernel-objects->Logic, fallback-rename->Logic) extract concurrently (disjoint Run line ranges, disjoint test files); the two emitters and the post-kernel passes serialize on Tuning.py and the contract. Per-commit gate = import-smoke (python -c 'import Tensile.TensileCreateLibrary as m; m.run') run FIRST, then the named char suite; full `tox -e unit -- -m unit` once per stage against the CONFIRMED develop baseline = **4974 passed / 220 skipped / 0 failed** (NBA-0b, this worktree; supersedes the stale DECISIONS.md D15 figure 2466/201, which under-counted ~2x).
 
 ## Invariant: every commit stays green
 
@@ -33,6 +33,60 @@ From projects/hipblaslt/tensilelite: (1) export ROCM_PATH=${ROCM_PATH:-/opt/rocm
 9. RULE H (per-commit verification): the green-build invariant is that 'import Tensile.TensileCreateLibrary; import Tensile.TensileCreateLibrary.Run; import Tensile.TensileCreateLibrary.__main__' succeeds AND pytest collects without ImportError for test_library_paths.py, test_perArchFallbackRename.py, characterization/TensileCreateLibraryRun, characterization/ParseArguments, characterization/_codegen, and characterization/LocalRead. Run this after each commit of the port, not only at the end.
 10. RULE I (back-import placement — ONE precise mechanical rule, supersedes every looser phrasing like "near the bottom of the import block" or "after the KernelMinResult def"): ALL sibling-module back-imports live in a SINGLE contiguous block at the END of Run.py, AFTER the `def run():` body (i.e. at EOF). Rationale: every back-imported name is only ever CALLED at runtime (inside a function body), never referenced at module-load time, so importing them last is safe; and by EOF all four shared-contract names (KernelCodeGenResult @132, KernelMinResult @144, processKernelSource @216, generateKernelHelperObjects @699) are already bound, so when the EOF block runs `from .IO/.Tuning import ...` — which transitively triggers IO/Tuning's `from .Run import KernelMinResult/KernelCodeGenResult/processKernelSource` — those resolve against a fully-defined (partially-initialized only w.r.t. the back-imports themselves) Run module. The cycle is broken by this ordering. Each issue APPENDS its `from .NewModule import <names>` line(s) to this one EOF block, one logical import per issue (one name per line to keep concurrent group-D appends conflict-free). import-smoke (`python -c 'import Tensile.TensileCreateLibrary.Run'`) is the FIRST gate after any commit that touches this block.
 
+## Direct-call monkeypatch audit (RULE C/D, workflow-verified 2026-06-26)
+
+Produced by the `nba-monkeypatch-audit` workflow (12 per-issue agents + 1 completeness
+critic) and then CORRECTED by an empirical Python-semantics check. The governing
+distinction — **verified empirically**, not assumed:
+
+- **Bare-name rebind** — `monkeypatch.setattr(M, "isaToGfx", x)` rebinds the name only in
+  Run's namespace. A function that has MOVED to IO/Logic/Tuning resolves that name in ITS
+  OWN module's `__globals__`, so the patch on `M` silently NO-OPS. **MUST retarget** to
+  `<TargetModule>.<name>` in the SAME commit as the move (RULE C).
+- **Shared-object mutation** — `setitem(M.globalParameters, k, v)` mutates the shared
+  `globalParameters` dict; `setattr(M.os/M.shutil/M.LibraryIO, "attr", x)` mutates the shared
+  module object. Every module that imported that object sees the change (it's the same
+  singleton — proven: `M.globalParameters is IO.globalParameters`, `M.LibraryIO is
+  Logic.LibraryIO`). So these stay effective after the move **WITHOUT retargeting** — exactly
+  what RULE D banks on. Leave them as `M.*` (Run keeps its os/shutil/LibraryIO/globalParameters
+  imports). Retargeting them is redundant-but-safe; do NOT, to minimize churn.
+
+This corrects the earlier over-scoping (the handoff "dead end" note and a draft review claimed
+`globalParameters`/`LibraryIO.write` need retargeting — they do NOT; only bare-name function
+rebinds do).
+
+**MUST-retarget table** (bare-name sites; `<file>:<line>` → new target). All other M-patch
+sites in the three TensileCreateLibraryRun char files are either shared-object mutations
+(no retarget) or moved-name stubs in `run()` orchestration tests (back-import keeps them
+effective, no retarget):
+
+- **NBA-2 / NBA-4 / NBA-6 / NBA-7 / NBA-8 / NBA-9 / NBA-13:** ZERO retargets (path/mem/fallback/
+  write-prim/kernel-objects/copy are stdlib/pure or only stubbed by name in run() tests;
+  writeSolutionsAndKernels is never directly called by any test — run() calls the TCL variant).
+- **NBA-3 → IO** (16): `isaToGfx` at test_run_helpers_char.py:57,63,69 + test_run_orchestration_char.py:97,103,109;
+  `verify_stinky_paths` at test_run_orchestration_char.py:135,144,154,**164**,176;
+  `_stinky_out` at test_run_orchestration_char.py:136,145,155,167,177.
+  NO retarget (shared): globalParameters setitem (helpers:56,62,68; orch:96,102,108); M.os (orch:126).
+  NOTE: line 164 is a MULTILINE `setattr(M,"verify_stinky_paths",…)` (name on the next line) the
+  critic caught after the single-line grep missed it — its test directly calls
+  `_verify_stinky_asm_comment_vs_elf_text`, which calls `verify_stinky_paths` (Run.py:186).
+- **NBA-5 → Tuning** (4): `getKeyNoInternalArgs` at test_run_helpers_char.py:116,127;
+  `ParallelMap2` at test_run_helpers_char.py:129 (multiline; name on 130);
+  `getKernelNameMin` at test_run_helpers_char.py:149.
+- **NBA-10 → Tuning** (3): `getKernelFileBase` at test_run_helpers_char.py:239,269,279
+  (the NBA-0c passPostKernelInfoToLibrary direct-call tests).
+- **NBA-11 → Logic** (1): `ParallelMap2` at test_r7_createlib_deep_char.py:555.
+  NO retarget (shared LibraryIO module): `M.LibraryIO.write` (orch:315),
+  `M.LibraryIO.parseLibraryLogicFile` (r7:519) — leave as `M.LibraryIO.*`.
+- **NBA-12 → Tuning** (17): in the four `TestWriteSolutionsAndKernelsTCL` methods that call
+  `M.writeSolutionsAndKernelsTCL` directly — `ParallelMap2` (334,372,398,430),
+  `buildAssemblyCodeObjectFiles` (335,373,399,431), `buildSourceCodeObjectFiles` (336,374,400,432),
+  `writeHelpers` (337,375,401,433) → Tuning.writeHelpers (Tuning does `from .IO import writeHelpers`),
+  `getKernelFileBase` (397).
+
+Re-verify these line numbers against the live test files before each extraction (the test
+files grow as Stage-0 pins land; numbers above are post-Stage-0, 2026-06-26).
+
 ## Build hooks that must keep resolving
 
 - cmake/tensilelite_auto_build.cmake VALID_BINS list: must keep entries 'TensileCreateLibrary','Tensile','TensileBenchmarkCluster','TensileGenerateSummations','TensileLogic','TensileRetuneLibrary','TensileUpdateLibrary','TensileMergeLibrary' — set_tensile_bin() FATAL_ERRORs on any name not in this list
@@ -56,7 +110,7 @@ From projects/hipblaslt/tensilelite: (1) export ROCM_PATH=${ROCM_PATH:-/opt/rocm
 
 ## Global risks
 
-- RULE D monkeypatch breakage is the dominant correctness risk and the point the source proposals contradicted each other on. VERIFIED: test_run_orchestration_char.py patches M.verify_stinky_paths, M._stinky_out, M.isaToGfx, M.globalParameters, and M.LibraryIO.write. A function resolves its free-variable lookups in ITS OWN module's __globals__, so once _verify_stinky_asm_comment_vs_elf_text / _stinky_asm_verify_wanted move to IO (NBA-3) and generateLogicDataAndSolutions moves to Logic (NBA-11), patching the Run module silently no-ops — the test would pass against UNPATCHED behavior or fail. Proposal 3's claim that 'Run keeps the import so M.x still works' is wrong for this reason. Resolution adopted: the moving commit RETARGETS those monkeypatches to the new module in the SAME commit (RULE C permits same-commit test edits for a move). Audit every moved function for reads of verify_stinky_paths/_stinky_out/isaToGfx/globalParameters/LibraryIO/os/shutil before extracting.
+- BARE-NAME monkeypatch breakage is the dominant correctness risk. VERIFIED (empirically + workflow audit): a function resolves free-variable lookups in ITS OWN module's __globals__, so once _verify_stinky_asm_comment_vs_elf_text / _stinky_asm_verify_wanted move to IO (NBA-3) and generateLogicDataAndSolutions moves to Logic (NBA-11), a `setattr(M, "<bare name>", ...)` on the Run module silently no-ops — the test would pass against UNPATCHED behavior or fail. The bare names that need retargeting are isaToGfx, verify_stinky_paths, _stinky_out (NBA-3), getKeyNoInternalArgs/ParallelMap2/getKernelNameMin (NBA-5), getKernelFileBase (NBA-10), ParallelMap2 (NBA-11), and ParallelMap2/buildAssemblyCodeObjectFiles/buildSourceCodeObjectFiles/writeHelpers/getKernelFileBase (NBA-12). CORRECTION to the earlier draft: M.globalParameters (dict) and M.os/M.shutil/M.LibraryIO (modules) are SHARED SINGLETONS — proven `M.globalParameters is IO.globalParameters` and `M.LibraryIO is Logic.LibraryIO` — so mutating them via M stays visible to the moved function and needs NO retarget (this is RULE D's whole point). Resolution: the moving commit retargets ONLY the bare-name monkeypatches to the new module in the SAME commit (RULE C). See the "Direct-call monkeypatch audit" table for the exact per-issue site list (re-verify line numbers first).
 - Un-pinned passPostKernelInfoToLibrary (proposal 1 missed this entirely). VERIFIED it is only ever patch.object(M,...)'d to a no-op in test_r7 (8 sites) with zero behavioral assertion. Moving it without a real pin would be an untested relocation of develop-only logic. Mitigation: NBA-0c pins it first and is a hard dependency of NBA-10.
 - CIRCULAR IMPORT. KernelCodeGenResult, KernelMinResult, processKernelSource, and generateKernelHelperObjects MUST stay defined in Run.py and the `from .IO/.Logic/.Tuning import` back-import block MUST sit at the BOTTOM of Run.py (after those defs), because IO (writeAssembly) and Tuning (both emitters) do `from .Run import KernelMinResult/processKernelSource/KernelCodeGenResult`. The cycle is broken only by partial-module-initialization ordering. Mitigation: run import-smoke (python -c 'import Tensile.TensileCreateLibrary.Run') as the FIRST gate of NBA-7/12/13 before any pytest.
 - rocisa nanobind import abort: import-smoke can SIGABRT if ROCM_PATH/LD_LIBRARY_PATH are unset or if --cov is pointed at a non-dir (double-import). Always use tox envs (loader path set); never pass --cov=<file>; use tox -e coverage-unit (--cov=Tensile, a package dir) for coverage. A green pytest run is only meaningful if import-smoke passed first.
@@ -303,7 +357,7 @@ Maximum-parallelism leaf extractions. Each issue moves a disjoint cohesive group
 **Steps:**
 1. Cut the three functions (Run.py 151-207) into IO.py with deps: os, pathlib.Path, globalParameters, isaToGfx, printExit, and move `from Tensile.verify_stinky_comment_vs_elf_text import verify_stinky_paths` into IO.py.
 2. Add `from .IO import _stinky_asm_verify_wanted, _stinky_out, _verify_stinky_asm_comment_vs_elf_text` to Run.py so M._stinky_* resolve and the (still-in-Run) emitter closures call them via Run namespace.
-3. In test_run_orchestration_char.py, add IO=import_module('...IO') and RETARGET in the SAME commit: monkeypatch.setattr(IO,'verify_stinky_paths',...), setattr(IO,'_stinky_out',...), setattr(IO,'isaToGfx',...), setitem(IO.globalParameters,...) for the cases that exercise the moved functions (lines ~96-177). This is mandatory because the function reads its own module's globals, not Run's.
+3. In the SAME commit, retarget the BARE-NAME patches to IO (see the "Direct-call monkeypatch audit" table): the 16 sites for `isaToGfx`, `verify_stinky_paths`, `_stinky_out` across test_run_helpers_char.py and test_run_orchestration_char.py — INCLUDING the multiline site at test_run_orchestration_char.py:164. Add `IO = import_module('...IO')` and change `setattr(M, 'isaToGfx'|...)` to `setattr(IO, ...)`. DO NOT retarget the `globalParameters` setitem sites or the `M.os` site: those mutate shared singletons (verified `M.globalParameters is IO.globalParameters`) and stay effective via RULE D — Run keeps its globalParameters/os imports. Retarget is mandatory for bare names because a moved function reads its own module's globals, not Run's; it is needless for shared-object mutations.
 4. Run import-smoke + test_run_orchestration_char.py + test_run_helpers_char.py.
 
 **Build safety.** RULE C: underscore names re-imported into Run for tests using M.; the emitter closures (still in Run) resolve via Run namespace. RULE D resolved correctly: monkeypatches retargeted to IO in the same commit so the patched globals are the ones the moved functions actually read — this is the fix for the proposal-3 NBA-6 defect (Run keeping the import does NOT make M.verify_stinky_paths the lookup the moved function uses).
@@ -523,7 +577,7 @@ Extract the larger Logic/IO bodies that depend on stage-2 leaves. copyStaticFile
 
 - **Size:** M | **Parallel group:** E | **Depends on:** NBA-6
 
-**Summary.** Move the ~120-LOC logic-load + per-arch merge + reindex + fallback + codeObjectFilesIndex core (Run.py 798-919) into Logic.py; re-import into Run. It calls renameFallbacksPerArch (now in Logic from NBA-6, intra-module) and reads LibraryIO. VERIFIED the orchestration test does monkeypatch.setattr(M.LibraryIO,'write',...) — once the function lives in Logic it reads Logic.LibraryIO, so the SAME commit must retarget that monkeypatch (RULE C/D).
+**Summary.** Move the ~120-LOC logic-load + per-arch merge + reindex + fallback + codeObjectFilesIndex core (Run.py 798-919) into Logic.py; re-import into Run. It calls renameFallbacksPerArch (now in Logic from NBA-6, intra-module), ParallelMap2, and LibraryIO. Per the verified audit: the only bare-name retarget is `ParallelMap2` (test_r7:555 -> Logic.ParallelMap2); the `M.LibraryIO.write`/`M.LibraryIO.parseLibraryLogicFile` patches need NO retarget because LibraryIO is a shared module singleton (M.LibraryIO is Logic.LibraryIO).
 
 **Files touched:**
 - `projects/hipblaslt/tensilelite/Tensile/TensileCreateLibrary/Logic.py`
@@ -533,18 +587,18 @@ Extract the larger Logic/IO bodies that depend on stage-2 leaves. copyStaticFile
 **Steps:**
 1. Cut generateLogicDataAndSolutions into Logic.py with deps: timing, itertools.repeat, ParallelMap2, LibraryIO (import the module), mergeTypeMismatchCollector, printTypeMismatchSummary, MasterSolutionLibrary, Assembler, print1; renameFallbacksPerArch is already Logic-local (NBA-6).
 2. Add `from .Logic import generateLogicDataAndSolutions` to Run.py so M.generateLogicDataAndSolutions resolves and run() calls it via the back-import.
-3. CRITICAL RULE D: in test_run_orchestration_char.py add Logic=import_module('...Logic') and retarget setattr(M.LibraryIO,'write',fake_write) -> setattr(Logic.LibraryIO,'write',fake_write) in the SAME commit (line ~315). Keep `from Tensile import LibraryIO` in Run.py because run() itself still calls LibraryIO.write, so M.LibraryIO stays a Run attribute for any other use.
+3. In the SAME commit retarget ONLY the bare-name `ParallelMap2` patch at test_r7_createlib_deep_char.py:555 -> `Logic.ParallelMap2` (the direct-call test of generateLogicDataAndSolutions). DO NOT retarget the `M.LibraryIO.write` (orch:315) or `M.LibraryIO.parseLibraryLogicFile` (r7:519) sites: `LibraryIO` is a shared module singleton (verified `M.LibraryIO is Logic.LibraryIO`), so those mutations stay effective after the move with no edit — this supersedes the earlier (incorrect) instruction to retarget LibraryIO.write. Keep `from Tensile import LibraryIO` in Run.py because run() itself still calls LibraryIO.write.
 4. Run import-smoke + orchestration char suite + r7 deep char suite.
 
 **Build safety.** RULE A: re-imported into Run (M. resolves). RULE D resolved correctly: the LibraryIO.write monkeypatch is retargeted to Logic in the same commit so it patches the module the moved function actually reads; Run keeps its own LibraryIO import for run()'s direct use. Depends on NBA-6 so the intra-Logic renameFallbacksPerArch call resolves without a Run round-trip.
 
 **Test strategy.** test_run_orchestration_char.py (generateLogicDataAndSolutions + LibraryIO.write retargeted to Logic) + test_r7_createlib_deep_char.py (run() path).
 
-**ADR action.** new ADR 0014-extract-generatelogicdataandsolutions-to-logic.md (documents the LibraryIO monkeypatch-target migration)
+**ADR action.** new ADR 0014-extract-generatelogicdataandsolutions-to-logic.md (documents the ParallelMap2 bare-name retarget and the shared-LibraryIO no-retarget finding)
 
 **Acceptance criteria:**
 - [ ] M.generateLogicDataAndSolutions resolves
-- [ ] orchestration test passes with LibraryIO.write monkeypatch retargeted to Logic and effective
+- [ ] orchestration + r7 tests pass; ParallelMap2 (r7:555) retargeted to Logic; M.LibraryIO.* patches left as-is (shared module) and still effective
 - [ ] M.LibraryIO still a Run attribute (run() use unaffected)
 - [ ] test_r7 green
 - [ ] import-smoke OK
