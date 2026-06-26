@@ -238,7 +238,7 @@ def _lib_sol(kernel_name, state):
 
 
 def test_pass_post_kernel_info_to_library_writes_master_and_lazy(monkeypatch):
-    monkeypatch.setattr(M, "getKernelFileBase", lambda split, k: k["name"])
+    monkeypatch.setattr(Tuning, "getKernelFileBase", lambda split, k: k["name"])
     results = [SimpleNamespace(cuoccupancy=100, mathclk=200)]
     kernels = [{"name": "k0"}]
     main_sol = _lib_sol("k0", _lib_state(AdaptiveGemmNTAB=9))
@@ -268,7 +268,7 @@ def test_pass_post_kernel_info_to_library_writes_master_and_lazy(monkeypatch):
 
 
 def test_pass_post_kernel_info_to_library_adaptive_defaults_zero(monkeypatch):
-    monkeypatch.setattr(M, "getKernelFileBase", lambda split, k: k["name"])
+    monkeypatch.setattr(Tuning, "getKernelFileBase", lambda split, k: k["name"])
     results = [SimpleNamespace(cuoccupancy=1, mathclk=2)]
     kernels = [{"name": "k0"}]
     sol = _lib_sol("k0", _lib_state())  # no AdaptiveGemmNTAB key
@@ -278,7 +278,7 @@ def test_pass_post_kernel_info_to_library_adaptive_defaults_zero(monkeypatch):
 
 
 def test_pass_post_kernel_info_to_library_keyerror_diagnostic(monkeypatch, capsys):
-    monkeypatch.setattr(M, "getKernelFileBase", lambda split, k: k["name"])
+    monkeypatch.setattr(Tuning, "getKernelFileBase", lambda split, k: k["name"])
     results = [SimpleNamespace(cuoccupancy=1, mathclk=2)]
     kernels = [{"name": "k0"}]
     sol = _lib_sol("MISSING", _lib_state())  # kernel not present in resultDict

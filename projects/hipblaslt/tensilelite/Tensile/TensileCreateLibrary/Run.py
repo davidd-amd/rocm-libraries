@@ -130,73 +130,6 @@ def processKernelSource(kernelWriterAssembly, data, outOptions, splitGSU, kernel
     )
 
 
-def passPostKernelInfoToLibrary(results, kernels, masterLibraries, splitGSU: bool):
-    resultDict = {}
-    for kernIdx, r in enumerate(results):
-        kName = getKernelFileBase(splitGSU, kernels[kernIdx])
-        resultDict["%s"%kName] = r
-    for archName, masterLibrary in masterLibraries.items():
-        for solIdx, sol in masterLibrary.solutions.items():
-            solutionKernels = sol.originalSolution.getKernels()
-            for kernel in solutionKernels:
-                kName = getKernelFileBase(splitGSU, kernel)
-                try:
-                    result = resultDict["%s"%kName]
-                    sol.sizeMapping.CUOccupancy = result.cuoccupancy
-                    sol.sizeMapping.MathClocksUnrolledLoop = result.mathclk
-                    sol.sizeMapping.PrefetchGlobalRead = sol.originalSolution._state['PrefetchGlobalRead']
-                    sol.sizeMapping.NonTemporalA = sol.originalSolution._state['NonTemporalA']
-                    sol.sizeMapping.NonTemporalB = sol.originalSolution._state['NonTemporalB']
-                    sol.sizeMapping.adaptiveGemmNTAB = sol.originalSolution._state.get('AdaptiveGemmNTAB', 0)
-                    sol.sizeMapping.NonTemporalD = sol.originalSolution._state['NonTemporalD']
-                    sol.sizeMapping.WaveSeparateGlobalReadA = sol.originalSolution._state['WaveSeparateGlobalReadA']
-                    sol.sizeMapping.WaveSeparateGlobalReadB = sol.originalSolution._state['WaveSeparateGlobalReadB']
-                    sol.sizeMapping.UnrollLoopSwapGlobalReadOrder = sol.originalSolution._state['UnrollLoopSwapGlobalReadOrder']
-                    sol.sizeMapping.DirectToVgprA = bool(sol.originalSolution._state['DirectToVgprA'])
-                    sol.sizeMapping.DirectToVgprB = bool(sol.originalSolution._state['DirectToVgprB'])
-                except KeyError:
-                    print(f"\n{'='*80}")
-                    print(f"ERROR: KeyError in masterLibrary.solutions")
-                    print(f"Architecture: {archName}")
-                    print(f"Solution Index: {solIdx}")
-                    print(f"Solution source file: {getattr(sol, 'srcName', 'Unknown')}")
-                    print(f"Solution library logic index: {getattr(sol, 'libraryLogicIndex', 'Unknown')}")
-                    print(f"Missing kernel name: {kName}")
-                    print(f"{'='*80}\n")
-                    raise
-        masterLibrary.lazyLibraries = dict(sorted(masterLibrary.lazyLibraries.items()))
-        for name, lib in masterLibrary.lazyLibraries.items():
-            for solIdx, sol in lib.solutions.items():
-                solutionKernels = sol.originalSolution.getKernels()
-                for kernel in solutionKernels:
-                    kName = getKernelFileBase(splitGSU, kernel)
-                    try:
-                        result = resultDict["%s"%kName]
-                        sol.sizeMapping.CUOccupancy = result.cuoccupancy
-                        sol.sizeMapping.MathClocksUnrolledLoop = result.mathclk
-                        sol.sizeMapping.PrefetchGlobalRead = sol.originalSolution._state['PrefetchGlobalRead']
-                        sol.sizeMapping.NonTemporalA = sol.originalSolution._state['NonTemporalA']
-                        sol.sizeMapping.NonTemporalB = sol.originalSolution._state['NonTemporalB']
-                        sol.sizeMapping.adaptiveGemmNTAB = sol.originalSolution._state.get('AdaptiveGemmNTAB', 0)
-                        sol.sizeMapping.NonTemporalD = sol.originalSolution._state['NonTemporalD']
-                        sol.sizeMapping.WaveSeparateGlobalReadA = sol.originalSolution._state['WaveSeparateGlobalReadA']
-                        sol.sizeMapping.WaveSeparateGlobalReadB = sol.originalSolution._state['WaveSeparateGlobalReadB']
-                        sol.sizeMapping.UnrollLoopSwapGlobalReadOrder = sol.originalSolution._state['UnrollLoopSwapGlobalReadOrder']
-                        sol.sizeMapping.DirectToVgprA = bool(sol.originalSolution._state['DirectToVgprA'])
-                        sol.sizeMapping.DirectToVgprB = bool(sol.originalSolution._state['DirectToVgprB'])
-                    except KeyError:
-                        print(f"\n{'='*80}")
-                        print(f"ERROR: KeyError in lazyLibrary")
-                        print(f"Architecture: {archName}")
-                        print(f"LazyLibrary name: {name}")
-                        print(f"Solution Index: {solIdx}")
-                        print(f"Solution source file: {getattr(sol, 'srcName', 'Unknown')}")
-                        print(f"Solution library logic index: {getattr(sol, 'libraryLogicIndex', 'Unknown')}")
-                        print(f"Missing kernel name: {kName}")
-                        print(f"Total kernels in this solution: {len(solutionKernels)}")
-                        print(f"{'='*80}\n")
-                        raise
-
 def writeSolutionsAndKernels(
     outputPath,
     asmToolchain,
@@ -856,6 +789,7 @@ from .Logic import (
 from .Tuning import (
     _checkInvalidSolutions,
     _checkInvalidSolutionsAndKernels,
+    passPostKernelInfoToLibrary,
     passPostKernelInfoToSolution,
     removeInvalidSolutionsAndKernels,
 )
