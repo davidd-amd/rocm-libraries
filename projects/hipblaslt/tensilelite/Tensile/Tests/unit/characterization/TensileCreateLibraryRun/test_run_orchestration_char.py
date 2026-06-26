@@ -417,3 +417,74 @@ class TestGenerateKernelObjectsFromSolutions:
         kernels_doubled = M.generateKernelObjectsFromSolutions(doubled)
         # Should be same count — dedup applies
         assert len(kernels_doubled) == len(kernels_single)
+
+
+# ===========================================================================
+# Import-surface contract (NBA-0d): executable RULES A/B/F guard.
+# Any decomposition commit that drops a .Run backbone symbol, a package
+# re-export, or the __main__.run attr fails HERE, at the source, instead of
+# at a downstream consumer.
+# ===========================================================================
+
+# The 6 names re-exported by __init__.py and consumed from the package root
+# by ClientWriter.py, BenchmarkProblems.py, GenerateSummations.py (RULE B).
+_PACKAGE_REEXPORTS = (
+    "copyStaticFiles",
+    "libraryDir",
+    "libraryRoot",
+    "run",
+    "tensileLibraryFile",
+    "writeSolutionsAndKernels",
+)
+
+# Every symbol the decomposition moves out of Run.py, plus the shared
+# worker contract that stays in Run.py. All must remain importable from
+# .Run at every commit via the re-import-back invariant (RULE A).
+_RUN_BACKBONE = (
+    # path helpers -> IO
+    "libraryRoot", "libraryDir", "_baseArchs", "tensileLibraryFile",
+    # stinky-asm ELF verification -> IO
+    "_stinky_asm_verify_wanted", "_stinky_out",
+    "_verify_stinky_asm_comment_vs_elf_text",
+    # mem-compression -> IO
+    "memCompress", "memDecompress",
+    # disk-write primitives -> IO
+    "writeAssembly", "writeHelpers",
+    # static-file copier -> IO
+    "copyStaticFiles",
+    # validity pruning + post-kernel-to-solution -> Tuning
+    "_checkInvalidSolutionsAndKernels", "_checkInvalidSolutions",
+    "removeInvalidSolutionsAndKernels", "passPostKernelInfoToSolution",
+    # post-kernel-to-library -> Tuning
+    "passPostKernelInfoToLibrary",
+    # emitters -> Tuning
+    "writeSolutionsAndKernels", "writeSolutionsAndKernelsTCL",
+    # fallback rename -> Logic
+    "_renameFallbackPlaceholders", "renameFallbacksPerArch",
+    # kernel-object derivation -> Logic
+    "generateKernelObjectsFromSolutions",
+    # logic load/merge core -> Logic
+    "generateLogicDataAndSolutions",
+    # shared contract that STAYS in Run.py (with bottom back-import block)
+    "processKernelSource", "generateKernelHelperObjects",
+    "KernelCodeGenResult", "KernelMinResult",
+    # public entry
+    "run",
+)
+
+
+def test_package_root_reexports_resolve():
+    pkg = importlib.import_module("Tensile.TensileCreateLibrary")
+    for name in _PACKAGE_REEXPORTS:
+        assert hasattr(pkg, name), f"package re-export dropped: {name}"
+        assert callable(getattr(pkg, name)), f"package re-export not callable: {name}"
+
+
+def test_run_backbone_symbols_resolve():
+    for name in _RUN_BACKBONE:
+        assert hasattr(M, name), f".Run backbone symbol dropped: {name}"
+
+
+def test_main_exposes_run_attr():
+    main = importlib.import_module("Tensile.TensileCreateLibrary.__main__")
+    assert hasattr(main, "run"), "__main__.run attr dropped (RULE F)"
