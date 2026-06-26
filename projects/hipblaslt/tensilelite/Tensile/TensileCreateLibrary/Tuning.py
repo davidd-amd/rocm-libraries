@@ -34,12 +34,16 @@ Run.py so existing imports keep resolving.
 from __future__ import annotations
 
 import functools
+import itertools
 import rocisa
+import shutil
 
 from pathlib import Path
 
-from Tensile.Common import ParallelMap2, ensurePath, print1, print2, printExit, tqdm
+from Tensile.Common import ParallelMap2, ensurePath, getVerbosity, print1, print2, printExit, printWarning, tqdm
 from Tensile.Common.Architectures import isaToGfx
+from Tensile.Common.GlobalParameters import globalParameters
+from Tensile.Common.TimingInstrumentation import timing_context
 from Tensile.KernelWriterBase import KERNEL_HELPER_FILENAME_CPP, KERNEL_HELPER_FILENAME_H
 from Tensile.SolutionStructs.Naming import getKernelFileBase, getKeyNoInternalArgs, getKernelNameMin
 from Tensile.Toolchain.Assembly import buildAssemblyCodeObjectFiles
@@ -288,6 +292,146 @@ def writeSolutionsAndKernelsTCL(
     )
 
     return len(uniqueAsmKernels), uniqueAsmKernels, results
+
+
+def writeSolutionsAndKernels(
+    outputPath,
+    asmToolchain,
+    srcToolchain,
+    solutions,
+    kernels,
+    kernelHelperObjs,
+    kernelWriterAssembly,
+    splitGSU: bool,
+    cmdlineArchs: List[str],
+    disableAsmComments: bool=False,
+    errorTolerant: bool=False,
+    generateSourcesAndExit: bool=False,
+    compress: bool=True,
+    removeTemporaries: bool=True,
+):
+    if globalParameters["PythonProfile"]:
+        globalParameters["CpuThreads"] = 0
+        printWarning("Python profiling is enabled. CpuThreads set to 0.")
+        import yappi
+        yappi.start()
+
+    codeObjectFiles = []
+
+    with timing_context("python_kernel_setup"):
+        outputPath = Path(outputPath)
+        # Builders fan out into <destRoot>/<base-arch>/ at the moment of write.
+        # Pre-create the per-base subdirs so concurrent emit doesn't race mkdir.
+        destRoot = ensurePath(libraryRoot(outputPath))
+        for base in _baseArchs(cmdlineArchs):
+            ensurePath(libraryDir(outputPath, base))
+        buildTmpPath = ensurePath(outputPath / "build_tmp" / outputPath.stem.upper())  #
+        assemblyTmpPath = ensurePath(
+            buildTmpPath / "assembly"
+        )  # Temp path for generated assembly files (.s)
+        objectTmpPath = ensurePath(
+            buildTmpPath / "code_object_tmp"
+        )  # Temp path for HSA code object files (.hsaco)
+
+        asmKernels = [k for k in kernels if k["KernelLanguage"] == "Assembly"]
+
+        visited = set()
+        duplicates = 0
+        for k in asmKernels:
+            base = getKernelFileBase(splitGSU, k)
+            k.duplicate = True if base in visited else False
+            if not k.duplicate:
+                k["BaseName"] = base
+            duplicates += k.duplicate
+            print2(f"Duplicate: {base}")
+            visited.add(base)
+        print1(f"Number of duplicate kernels: {duplicates}")
+
+        outOptions = rocisa.rocIsa.getInstance().getOutputOptions()
+        outOptions.outputNoComment = disableAsmComments
+
+        numAsmKernels = len(asmKernels)
+        numKernels = len(asmKernels)
+        assert numKernels == numAsmKernels, "Only assembly kernels are supported in TensileLite"
+        asmIter = zip(
+            itertools.repeat(kernelWriterAssembly),
+            itertools.repeat(rocisa.rocIsa.getInstance().getData()),
+            itertools.repeat(outOptions),
+            itertools.repeat(splitGSU),
+            asmKernels
+        )
+        memcompress = numAsmKernels > 10000
+    with timing_context("python_kernel_codegen"):
+        asmResults = ParallelMap2(functools.partial(processKernelSource, compress=memcompress), asmIter, "Generating assembly kernels", return_as="list")
+    with timing_context("python_kernel_validate"):
+        removeInvalidSolutionsAndKernels(
+            asmResults, asmKernels, solutions, errorTolerant, getVerbosity(), splitGSU
+        )
+        passPostKernelInfoToSolution(
+            asmResults, asmKernels, solutions, splitGSU
+        )
+
+    def assemble(ret):
+        p, isa, wavefrontsize, _ = ret
+        o_path = p.with_suffix(".o")
+        asmToolchain.assembler(isaToGfx(isa), wavefrontsize, str(p), str(o_path))
+        if _stinky_asm_verify_wanted(isa):
+            _verify_stinky_asm_comment_vs_elf_text(p, o_path, p.stem)
+        if removeTemporaries:
+            p.unlink()
+
+    unaryWriteAssembly = functools.partial(writeAssembly, assemblyTmpPath)
+    compose = lambda *F: functools.reduce(lambda f, g: lambda x: f(g(x)), F)
+    with timing_context("python_kernel_write_assemble"):
+        ret = ParallelMap2(
+            compose(assemble, unaryWriteAssembly),
+            asmResults,
+            "Writing assembly kernels",
+            return_as="list",
+            multiArg=False,
+        )
+
+    with timing_context("python_kernel_write_helpers"):
+        writeHelpers(outputPath, kernelHelperObjs, KERNEL_HELPER_FILENAME_CPP, KERNEL_HELPER_FILENAME_H)
+    srcKernelFile = Path(outputPath) / "Kernels.cpp"
+
+    if globalParameters["PythonProfile"]:
+        yappi.stop()
+        yappi.get_func_stats().save("yappi_results.profile", type="callgrind")
+        with open("yappi_results.txt", "w") as f:
+            yappi.get_func_stats().print_all(out=f)
+        if globalParameters["CpuThreads"] != 0:
+            with open("yappi_thread_stats.txt", "w") as f:
+                yappi.get_thread_stats().print_all(out=f)
+
+    if not generateSourcesAndExit:
+        with timing_context("python_kernel_build_co"):
+            codeObjectFiles += buildAssemblyCodeObjectFiles(
+                asmToolchain.linker,
+                asmToolchain.bundler,
+                asmKernels,
+                destRoot,
+                assemblyTmpPath,
+                compress,
+            )
+
+        with timing_context("python_kernel_build_src_co"):
+            buildSourceCodeObjectFiles(
+                srcToolchain.compiler,
+                srcToolchain.bundler,
+                destRoot,
+                objectTmpPath,
+                outputPath,
+                srcKernelFile,
+                cmdlineArchs,
+            )
+
+    if removeTemporaries and not generateSourcesAndExit:
+        buildTmp = outputPath / "build_tmp"
+        if buildTmp.exists() and buildTmp.is_dir():
+            shutil.rmtree(buildTmp)
+
+    return codeObjectFiles, numKernels
 
 
 from .IO import (

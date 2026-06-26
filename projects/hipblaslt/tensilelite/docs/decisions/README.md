@@ -46,3 +46,4 @@ record's **History** section. Use the template below.
 - [0013 — Extract passPostKernelInfoToLibrary to Tuning.py](0013-extract-passpostkernelinfotolibrary-to-tuning.md)
 - [0014 — Extract generateLogicDataAndSolutions to Logic.py](0014-extract-generatelogicdataandsolutions-to-logic.md)
 - [0015 — Extract writeSolutionsAndKernelsTCL (live emitter) to Tuning.py](0015-extract-tcl-emitter-to-tuning.md)
+- [0016 — Extract writeSolutionsAndKernels (public emitter) to Tuning.py](0016-extract-legacy-emitter-to-tuning.md)
