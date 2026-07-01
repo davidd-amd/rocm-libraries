@@ -28,6 +28,8 @@ import os
 import sys
 import time
 
+from typing import NamedTuple
+
 from joblib import Parallel, delayed
 
 from .Utilities import tqdm
@@ -197,6 +199,18 @@ def ParallelMapReturnAsGenerator(function, objects, message="", enable=True, mul
             yield result.result()
 
 
+class ParallelMapConfig(NamedTuple):
+    """Bundled ParallelMap2 options for the fused build pipeline call form
+    ``ParallelMap2(function, config, objects)``. Backward-compatible: the legacy
+    positional form ``ParallelMap2(function, objects, message=..., ...)`` still
+    works (see the adapter in ParallelMap2)."""
+    message: str = ""
+    enable: bool = True
+    multiArg: bool = False
+    return_as: str = "generator_unordered"
+    procs: int = None
+
+
 def ParallelMap2(
     function, objects, message="", enable=True, multiArg=True, return_as="list", procs=None
 ):
@@ -207,15 +221,26 @@ def ParallelMap2(
       enable: May be set to false to disable parallelism.
       multiArg: True if objects represent multiple arguments
                   (differentiates multi args vs single collection arg)
+
+    Accepts two call forms:
+      * legacy/develop positional: ParallelMap2(function, objects, message=..., ...)
+      * config form used by the fused pipeline: ParallelMap2(function, config, objects)
+        where config is a ParallelMapConfig; the real objects then arrive in the
+        third positional argument.
     """
+    if isinstance(objects, ParallelMapConfig):
+        config = objects
+        objects = message
+        message, enable, multiArg, return_as, procs = (
+            config.message, config.enable, config.multiArg, config.return_as, config.procs
+        )
+
     if return_as in ("generator", "generator_unordered") and not joblibParallelSupportsGenerator():
         return ParallelMapReturnAsGenerator(function, objects, message, enable, multiArg)
 
     from .GlobalParameters import globalParameters
 
     threadCount = procs if procs else CPUThreadCount(enable)
-
-    threadCount = CPUThreadCount(enable)
 
     if threadCount <= 1 and globalParameters["ShowProgressBar"]:
         # Provide a progress bar for single-threaded operation.
