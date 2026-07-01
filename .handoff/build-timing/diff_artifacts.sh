@@ -14,6 +14,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 IMAGE=tensilelite-char:gpumocks
 WT=/home/davdixon/projects/rocm-libraries/.claude/worktrees/parallel-build-algo/projects/hipblaslt
 RB=/home/davdixon/projects/rocm-libraries/.claude/worktrees/parallel-build-algo/projects/hipblaslt/tensilelite/rocisa/build/cp312-cp312-linux_x86_64
+# Optional: point the mounted tensilelite tree elsewhere (e.g. a git-archive of a
+# prior commit) to fingerprint a different source revision with the same rocisa.
+TENSILE_TREE="${TENSILE_TREE:-$WT/tensilelite}"
 
 fp_path () { # <name> <filter>
   local n="$1"; local f; f="$(echo "$2" | tr '[:upper:]' '[:lower:]')"
@@ -30,7 +33,7 @@ build_and_fingerprint () { # <filter> -> writes fingerprint lines to stdout
     LOGIC="$WT/library/src/amd_detail/rocblaslt/src/Tensile/Logic"
   fi
   docker run --rm \
-    -v "$WT/tensilelite":/wt:ro -v "$RB":/rb:ro -v "$LOGIC":/logic:ro \
+    -v "$TENSILE_TREE":/wt:ro -v "$RB":/rb:ro -v "$LOGIC":/logic:ro \
     -w /tmp "$IMAGE" bash -c '
       set -e
       SP=$(python3 -c "import sys; print([p for p in sys.path if p.endswith(\"site-packages\")][0])")

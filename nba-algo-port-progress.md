@@ -56,19 +56,48 @@ Plan: port `codeObjectFileBaseName` (new `CodeObjectName.py`) + `DataIndex`
 (into `LibraryIO.py`) as ADDITIVE infra, re-derived to match the branch naming
 exactly; add a name-equivalence verification vs real `SolutionLibrary` output.
 
-## Symbol work-list status
+## Symbol work-list status (Group 1)
 
-| Unit | target | status |
-| ---- | ------ | ------ |
-| baseline + diff_artifacts.sh | .handoff/build-timing | DONE |
-| CodeObjectName.codeObjectFileBaseName (infra) | new module | TODO |
-| DataIndex (infra) | LibraryIO.py | TODO |
-| schedule | Logic.py | TODO |
-| getCoFileNames | Logic.py | TODO |
-| Parallel.py engine (ParallelMapConfig + return_as + procs) | Common/Parallel.py | TODO |
-| generateSolutionsAndLibraries | IO.py | TODO |
-| generateParentLibrary | IO.py | TODO |
-| buildAssemblyKernels | Run.py | TODO |
-| processMsl | Run.py | TODO |
-| buildCoAndHelpers | Run.py | TODO |
-| extractBuildResults | Run.py | TODO |
+| Unit | target | status | commit |
+| ---- | ------ | ------ | ------ |
+| baseline + diff_artifacts.sh | .handoff/build-timing | DONE | a51330f |
+| CodeObjectName.codeObjectFileBaseName (infra) | new module | DONE (re-derived to branch naming; names == real .co basenames) | e450b4d |
+| DataIndex (infra) | LibraryIO.py | DONE | e450b4d |
+| distribute + schedule | Logic.py | DONE | e450b4d |
+| getCoFileNames (reads DeviceNames too) | Logic.py | DONE | e450b4d |
+| Parallel.py engine (ParallelMapConfig + adapter + procs fix) | Common/Parallel.py | DONE (per-task globalParameters preserved) | 120cfc4 |
+| generateSolutionsAndLibraries | IO.py | DONE (7-arg parseLibraryLogicFile) | 7afc848 |
+| genLazyMasterSolutionLibrary + generateParentLibrary | IO.py | DONE (applyNaming(splitGSU)) | 7afc848 |
+| buildAssemblyKernels | Run.py | DONE (processKernelSource + 4-tuple writeAssembly) | 24d88d1 |
+| processMsl + updateMasterLibrary | Run.py | DONE | 24d88d1 |
+| buildCoAndHelpers | Run.py | DONE (unaryBuildCOFile partial form) | 24d88d1 |
+| extractBuildResults + updateParentMasterLibrary | Run.py | DONE | 24d88d1 |
+
+All symbols import (goal acceptance import line passes). PerfMetric-edge hardening
+in 823b34b (surfaced by review).
+
+## Group 1 GATE — PASSED (2026-06-30)
+
+- import-smoke clean; full acceptance import line resolves; ParallelMap2 keeps
+  `objects` param (backward-compat).
+- char `-m unit`: **4981 passed / 220 skipped / 0 failed** = exact baseline parity.
+- SUBSET artifacts IDENTICAL after every commit.
+- FULL gfx90a (199 files, pre-change b2f1930 vs HEAD): inventory MATCH, ALL
+  symbol/token COUNTS MATCH. 96 `.co` differ only by symbol-name sha — proven
+  benign by HEAD-vs-HEAD noise floor (93 `.co` vary with identical code, 0 count
+  diffs). = structural equivalence.
+- Name equivalence: codeObjectFileBaseName(getCoFileNames) == real emitted `.co`
+  basename **98/98** across the full gfx90a feature matrix.
+- Fresh-context review: **CLEAN** (nba-algo-port-group1-review.md).
+- ADR 0020 written. Commits: a51330f, e450b4d, 120cfc4, 7afc848, 24d88d1, 823b34b.
+
+## Group 2/3 carry-forward notes
+
+- codeObjectFileBaseName chip-id (`_ID<chipid>`) branch is UNEXERCISED on gfx90a
+  (gfx90a returns False from supportsChipIdPredicate). Mirrored exactly from the
+  branch hardware() but only real arches (gfx12xx) will exercise it — re-verify
+  when other arches are added (goal-3 next-arches plan).
+- buildAssemblyKernels/buildCoAndHelpers runtime behavior is NOT yet exercised
+  (additive, unwired). Group 2's build+equiv gate is their first real test.
+- run() still uses the serial generateLogicDataAndSolutions + writeSolutionsAndKernelsTCL
+  path; the fused schedule()+compose() wiring is Group 2.
