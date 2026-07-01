@@ -39,12 +39,14 @@ import shutil
 import zlib
 
 from pathlib import Path
-from typing import Collection, List, Union
+from typing import Collection, Dict, List, Union
 
 from Tensile import SOURCE_PATH
-from Tensile.Common import CHeader, IsaVersion, printExit
+from Tensile.Common import CHeader, IsaVersion, printExit, state
 from Tensile.Common.Architectures import isaToGfx
 from Tensile.Common.GlobalParameters import globalParameters
+from Tensile.LibraryIO import parseLibraryLogicFile, write
+from Tensile.SolutionLibrary import MasterSolutionLibrary
 from Tensile.Utilities.Decorators.Timing import timing
 from Tensile.verify_stinky_comment_vs_elf_text import verify_stinky_paths
 
@@ -218,6 +220,55 @@ def copyStaticFiles(outputPath):
         shutil.copy(os.path.join(SOURCE_PATH, fileName), outputPath)
 
     return libraryStaticFiles
+
+
+def generateSolutionsAndLibraries(assembler, isaInfoMap, lazy, logicFiles):
+    """Parse a schedule() bin of logic-file groups into flat (solutions,
+    libraries) lists for the fused build pipeline.
+
+    ``logicFiles`` is a list of ``(totalBytes, [logicFile, ...])`` groups (a
+    schedule bin). Each logic file is parsed with the branch's 7-arg
+    ``parseLibraryLogicFile`` (splitGSU=False, printSolutionRejectionReason=True,
+    printIndexAssignmentInfo=False — matching ``generateLogicDataAndSolutions``).
+    Returns ``(solutions, [(architecture, library), ...])`` for the whole bin;
+    per-arch merging happens downstream."""
+    solutions = []
+    libraries = []
+    for logicFileGroup in logicFiles:
+        for logicFile in logicFileGroup[1]:
+            libraryLogic = parseLibraryLogicFile(
+                logicFile, assembler, False, True, False, isaInfoMap, lazy
+            )
+            solutions.extend(libraryLogic.solutions)
+            libraries.append((libraryLogic.architecture, libraryLogic.library))
+
+    return solutions, libraries
+
+
+def genLazyMasterSolutionLibrary(libraryPath, libraryFormat, masterLib, splitGSU=False):
+    """Write each lazy child library of ``masterLib`` to its own catalog file.
+    Preserves develop's ``applyNaming(splitGSU)`` (nba-final hardcoded False)."""
+    for name, lib in list(masterLib.lazyLibraries.items()):
+        catalogPath = Path(libraryPath) / name
+        lib.applyNaming(splitGSU)
+        write(str(catalogPath), state(lib), libraryFormat)
+
+
+def generateParentLibrary(
+    libraryFormat: str,
+    libraryPath: Union[Path, str],
+    masterLibs: Dict[str, MasterSolutionLibrary],
+    lazyLibraryLoading: bool,
+    splitGSU: bool = False,
+):
+    """Write the per-arch parent master library (``TensileLibrary_lazy_<arch>``
+    or ``TensileLibrary_<arch>``). Reconciled with develop's dual naming +
+    ``applyNaming(splitGSU)`` (nba-final hardcoded False)."""
+    base = "TensileLibrary_lazy_" if lazyLibraryLoading else "TensileLibrary_"
+    for arch, masterLib in masterLibs.items():
+        name = base + arch
+        masterLib.applyNaming(splitGSU)
+        write(str(Path(libraryPath) / name), state(masterLib), libraryFormat)
 
 
 from .Run import KernelCodeGenResult, KernelMinResult
