@@ -103,8 +103,14 @@ def codeObjectFileBaseName(d: dict, useLazyLibraryLoading: bool = True):
         placeholderName += problemType.placeholderStr(includeBatch=True, includeType=True)
 
         # --- performanceMetric() (SolutionLibrary @431-439)
-        if d.get("PerfMetric", "DeviceEfficiency") != "DeviceEfficiency":
-            predicate = Predicate(tag=d["PerfMetric"])
+        # Match parseLibraryLogicList truthiness: an absent PerfMetric arrives as
+        # None (getCoFileNames reads a fixed index), which parseLibraryLogicList
+        # treats as "no PerfMetric" (it sets the key only `if len(data) > 10 and
+        # data[10]`). Coalesce None/falsy to the DeviceEfficiency default so the
+        # name matches SolutionLibrary rather than emitting a spurious "_None".
+        perfMetric = d.get("PerfMetric") or "DeviceEfficiency"
+        if perfMetric != "DeviceEfficiency":
+            predicate = Predicate(tag=perfMetric)
         else:
             predicate = Predicate(tag="TruePred")
         if predicate.tag != "TruePred":
