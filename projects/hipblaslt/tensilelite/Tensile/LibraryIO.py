@@ -77,6 +77,33 @@ except ImportError:
     from yaml import SafeDumper as yamlDumper
     printWarning("CSafeDumper not installed. Fallback to SafeDumper.")
 
+from enum import IntEnum
+
+
+class DataIndex(IntEnum):
+    """Positional indices of the fields in a library-logic YAML sequence.
+
+    Mirrors the layout consumed by ``parseLibraryLogicList``/``rawLibraryLogic``
+    so callers can read a single field cheaply without materializing the whole
+    logic file (see ``TensileCreateLibrary.Logic.getCoFileNames``).
+    """
+    MINIMUM_REQUIRED_VERSION = 0
+    SCHEDULE_NAME = 1
+    DEVICE_PROPERTIES = 2
+    DEVICE_NAMES = 3
+    PROBLEM_TYPE = 4
+    SOLUTIONS = 5
+    INDEX_ORDER = 6
+    EXACT_LOGIC = 7
+    RANGE_LOGIC = 8
+    PERF_METRIC = 10
+    LIBRARY_TYPE = 11
+    CODE_OBJECT_NAME = 12
+
+    def __index__(self):
+        return self.value
+
+
 # Custom YAML loader that preserves int type for 0 and 1 (doesn't auto-convert to bool)
 # This allows type validation to catch int-vs-bool mismatches in YAML files.
 class StrictTypeLoader(yamlLoader):

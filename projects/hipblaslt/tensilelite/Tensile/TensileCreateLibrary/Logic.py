@@ -32,15 +32,79 @@ resolving.
 """
 
 import copy
+import heapq
 import itertools
 
+from os.path import getsize
+
 from Tensile import LibraryIO
+from Tensile.CodeObjectName import codeObjectFileBaseName
 from Tensile.Common import ParallelMap2, print1
+from Tensile.CustomYamlLoader import load_yaml_sequence_item, DEFAULT_YAML_LOADER
+from Tensile.LibraryIO import DataIndex
 from Tensile.SolutionLibrary import MasterSolutionLibrary, PlaceholderLibrary
 from Tensile.SolutionStructs.Naming import getKeyNoInternalArgs
 from Tensile.SolutionStructs.Solution import mergeTypeMismatchCollector, printTypeMismatchSummary
 from Tensile.Toolchain.Component import Assembler
 from Tensile.Utilities.Decorators.Timing import timing
+
+
+def distribute(lst, n):
+    """Greedy longest-processing-time bin-pack of (weight, payload) pairs into n
+    bins, returned heaviest-bin-first. Balances total weight across bins."""
+    list_of_lists = [[] for _ in range(n)]
+    totals = [(0, i) for i in range(n)]
+    heapq.heapify(totals)
+    for value, f in lst:
+        total, index = heapq.heappop(totals)
+        list_of_lists[index].append((value, f))
+        heapq.heappush(totals, (total + value, index))
+    return sorted(list_of_lists, key=lambda x: sum(first for first, _ in x), reverse=True)
+
+
+def getCoFileNames(logicFile):
+    """Cheaply derive the code-object base name for a logic file by reading only
+    the fields the name depends on straight from YAML (no solution build).
+
+    Returns ``(codeObjectBaseName, logicFile)`` so callers can group logic files
+    that target the same code object. The extracted metadata mirrors
+    ``LibraryIO.parseLibraryLogicList`` so the name matches what
+    ``SolutionLibrary`` would emit."""
+    data = {}
+    data["ProblemType"] = load_yaml_sequence_item(logicFile, DEFAULT_YAML_LOADER, DataIndex.PROBLEM_TYPE.value)
+    properties = load_yaml_sequence_item(logicFile, DEFAULT_YAML_LOADER, DataIndex.DEVICE_PROPERTIES.value)
+    if isinstance(properties, dict):
+        data["ArchitectureName"] = properties["Architecture"]
+        data["CUCount"] = properties["CUCount"]
+    else:
+        data["ArchitectureName"] = properties
+        data["CUCount"] = None
+    data["DeviceNames"] = load_yaml_sequence_item(logicFile, DEFAULT_YAML_LOADER, DataIndex.DEVICE_NAMES.value)
+    data["PerfMetric"] = load_yaml_sequence_item(logicFile, DEFAULT_YAML_LOADER, DataIndex.PERF_METRIC.value)
+    return codeObjectFileBaseName(data), logicFile
+
+
+def schedule(cofiles: list, numberOfTasks: int, procs: int):
+    """Load-balance logic files across ``numberOfTasks`` bins by summing the byte
+    size of the logic files that share each code object, so co-located files
+    (same output code object) always land in the same bin.
+
+    ``cofiles`` is an iterable of ``(codeObjectBaseName, logicFile)`` pairs (from
+    ``getCoFileNames``). Returns a list of bins, each a list of
+    ``(totalBytes, [logicFile, ...])`` groups, empty bins removed."""
+    problemMap = {}
+    for codeObjectFile, logicFile in cofiles:
+        if codeObjectFile in problemMap:
+            problemMap[codeObjectFile].append(logicFile)
+        else:
+            problemMap[codeObjectFile] = [logicFile]
+
+    result = []
+    for codeObjectFile, logicFiles in problemMap.items():
+        count = sum(getsize(logicFile) for logicFile in logicFiles)
+        result.append((count, logicFiles))
+
+    return list(filter(lambda x: x != [], distribute(result, numberOfTasks)))
 
 
 @timing
