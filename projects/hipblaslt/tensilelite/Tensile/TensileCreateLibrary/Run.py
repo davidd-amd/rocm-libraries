@@ -155,6 +155,89 @@ def generateKernelHelperObjects(solutions: List[Solution], cxxCompiler: str, isa
     return sorted(khos, key=sortByEnum, reverse=True) # Ensure that we write Enum kernel helpers are first in list
 
 
+def buildAssemblyKernels(asmPath, assembler, kernelWriterAssembly, data, outOptions,
+                         splitGSU, removeTemporaries, solnLibs):
+    """Fused-pipeline stage: for one schedule bin's (solutions, libraries), emit
+    and assemble the unique assembly kernels into per-pid .o files.
+
+    Reconciled to the branch: uses ``processKernelSource`` (KernelCodeGenResult)
+    + IO.writeAssembly (4-tuple) + the ``asmToolchain.assembler`` call convention
+    ``assembler(gfx, wavefrontSize, srcPath, objPath)``. Returns
+    ``(uniqueAsmKernels, libraries)`` for the next stage. Not wired into run()
+    yet (Group 2)."""
+    kernels = [s.getKernels()[0] for s in solnLibs[0]]
+    uniqueAsmKernels = [k for k in kernels if "BuildKernel" in k]
+
+    pksResults = [processKernelSource(kernelWriterAssembly, data, outOptions, splitGSU, k)
+                  for k in uniqueAsmKernels]
+    asmPidPath = Path(asmPath) / str(os.getpid())
+    asmPidPath.mkdir(exist_ok=True)
+    for p, isa, wavefrontsize, _ in set(writeAssembly(asmPidPath, k) for k in pksResults):
+        assembler(isaToGfx(isa), wavefrontsize, str(p), str(p.with_suffix(".o")))
+        if removeTemporaries:
+            p.unlink()
+    return uniqueAsmKernels, solnLibs[1]
+
+
+def updateMasterLibrary(currMasterLib, prevMasterLib, nextIdx):
+    """Merge one master library into the running accumulator for a schedule bin."""
+    assert prevMasterLib is not None or currMasterLib is not None
+    if prevMasterLib is not None:
+        nextIdx = prevMasterLib.merge(currMasterLib, nextIdx)
+    else:
+        prevMasterLib = currMasterLib
+        nextIdx = 0
+    return prevMasterLib, nextIdx
+
+
+def updateParentMasterLibrary(gfxName, masterLib, masterLibraries, nextIdx):
+    """Merge a per-bin master library into the per-arch parent accumulator."""
+    if gfxName in masterLibraries:
+        nextIdx = masterLibraries[gfxName].merge(masterLib, nextIdx)
+    else:
+        masterLibraries[gfxName] = masterLib
+
+
+def processMsl(libraryPath, libraryFormat, solnLibTup, splitGSU=False):
+    """Fused-pipeline stage: fold a bin's per-file libraries into one master
+    library and write its lazy child catalogs. ``applyNaming(splitGSU)`` is
+    preserved via genLazyMasterSolutionLibrary (develop feature). Not wired yet."""
+    solns, libraries = solnLibTup
+    if len(libraries) > 0:
+        masterLib = None
+        nextSolutionIdx = 0
+        for _, lib in libraries:
+            masterLib, nextSolutionIdx = updateMasterLibrary(lib, masterLib, nextSolutionIdx)
+
+        genLazyMasterSolutionLibrary(libraryPath, libraryFormat, masterLib, splitGSU)
+    return solns, libraries
+
+
+def extractBuildResults(result):
+    """Reduce the per-bin (kernels, libraries) stream into a flat kernel list and
+    a per-arch parent master-library map. Not wired into run() yet (Group 2)."""
+    masterLibs = {}
+    nextIdx = 0
+    flattenedList = []
+    for l, library in result:
+        if len(library) > 0:
+            for gfxName, lib in library:
+                updateParentMasterLibrary(gfxName, lib, masterLibs, nextIdx)
+        flattenedList.extend(l)
+    return flattenedList, masterLibs
+
+
+def buildCoAndHelpers(unaryBuildCOFile, input):
+    """Fused-pipeline stage: link/bundle a bin's unique assembly kernels into
+    code objects via a pre-bound ``buildAssemblyCodeObjectFiles`` partial
+    (``unaryBuildCOFile``), passing the kernels through. In run() this is bound
+    with ``functools.partial(buildCoAndHelpers, unaryBuildCOFile)`` to form the
+    unary stage the fused compose() expects. Not wired yet (Group 2)."""
+    uniqueAsmKernels, libraries = input
+    unaryBuildCOFile(uniqueAsmKernels)
+    return uniqueAsmKernels, libraries
+
+
 ################################################################################
 # Tensile Create Library
 ################################################################################
@@ -380,6 +463,9 @@ from .IO import (
     _stinky_out,
     _verify_stinky_asm_comment_vs_elf_text,
     copyStaticFiles,
+    generateParentLibrary,
+    generateSolutionsAndLibraries,
+    genLazyMasterSolutionLibrary,
     libraryDir,
     libraryRoot,
     memCompress,
