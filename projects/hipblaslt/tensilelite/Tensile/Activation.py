@@ -30,12 +30,13 @@ from typing import List, Union
 
 from rocisa import rocIsa
 from rocisa.code import Module, TextBlock
-from rocisa.container import VCC, EXEC, vgpr, sgpr, HolderContainer, RegisterContainer, Holder
-from rocisa.enum import InstType
+from rocisa.container import VCC, EXEC, vgpr, sgpr, HolderContainer, RegisterContainer, Holder, \
+    SDWAModifiers, VOP3PModifiers
+from rocisa.enum import InstType, SelectBit, UnusedBit
 from rocisa.instruction import Instruction, SMovB32, SNop, SSetMask, VAddF16, VAddF32, \
     VAddPKF16, VAndB32, VCmpGEF16, VCmpGEF32, VCmpGEF64, VCmpGEI32, VCmpGTF16, VCmpGTF32, \
     VCmpGTF64, VCmpGTI32, VCmpXClassF32, VCmpXLtF32, VCndMaskB32, VExpF16, VExpF32, VFmaF16, \
-    VFmaF32, VFmaPKF16, VMaxF32, VMaxF64, VMaxI32, VMaxPKF16, VMed3I32, VMinF16, VMinF32, \
+    VFmaF32, VFmaPKF16, VMaxF16, VMaxF32, VMaxF64, VMaxI32, VMaxPKF16, VMed3I32, VMinF16, VMinF32, \
     VMinF64, VMinI32, VMovB32, VMulF16, VMulF32, VMulF64, VMulLOU32, VMulPKF16, VRcpF16, \
     VRcpF32, VSubF32, VSubI32
 
@@ -582,6 +583,7 @@ class ActivationModule:
             sgprMagicK1 = self.getSgpr(1)
             sgprPKLiteral = self.getSgpr(1)
             module.add(SMovB32(dst=sgpr(Holder(idx=sgprMagicK1)), src=flt16GeluK1Str, comment="Float16GeluK1" ))
+            coef = floatUnion(u=ActivationMagicNumbers["FloatGeluK0"])
             module.add(SMovB32(dst=sgpr(Holder(idx=sgprPKLiteral)), src=coef.f))
             vgprTemp = self.getVgpr(1)
             if self.usePK:

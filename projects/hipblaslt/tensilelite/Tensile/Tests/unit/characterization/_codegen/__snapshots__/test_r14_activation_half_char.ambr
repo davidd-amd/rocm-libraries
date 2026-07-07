@@ -1,0 +1,81 @@
+# serializer version: 1
+# name: test_r14_activation_half_golden
+  dict({
+    'clamp': '''
+      v_min_f16 v[vgpr0], s[sgpractivationBeta], v[vgpr0] dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:WORD_0 src1_sel:WORD_0 // min(x, beta)
+      v_max_f16 v[vgpr0], s[sgpractivationAlpha], v[vgpr0] dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:WORD_0 src1_sel:WORD_0 // max(alpha, min(x, beta))
+      v_min_f16 v[vgpr0], s[sgpractivationBeta], v[vgpr0] dst_sel:WORD_1 dst_unused:UNUSED_PRESERVE src0_sel:WORD_1 src1_sel:WORD_1 // min(x, beta)
+      v_max_f16 v[vgpr0], s[sgpractivationAlpha], v[vgpr0] dst_sel:WORD_1 dst_unused:UNUSED_PRESERVE src0_sel:WORD_1 src1_sel:WORD_1 // max(alpha, min(x, beta))
+  
+    ''',
+    'clippedrelu': '''
+      v_cmp_gt_f16 vcc, v[vgpr0], s[sgpractivationAlpha] src0_sel:WORD_0 src1_sel:WORD_0 // x > alpha?
+      v_min_f16 v[vgpr0], s[sgpractivationBeta], v[vgpr0] dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:WORD_0 src1_sel:WORD_0 // min(x, beta)
+      v_min_f16 v0, s[sgpractivationBeta], 0.0 dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:WORD_0 src1_sel:WORD_0 // min(0, beta)
+      v_cndmask_b32 v[vgpr0], v0, v[vgpr0], vcc dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:WORD_0 src1_sel:WORD_0 // set x to min(0, beta) if <= alpha
+      v_cmp_gt_f16 vcc, v[vgpr0], s[sgpractivationAlpha] src0_sel:WORD_1 src1_sel:WORD_0 // x > alpha?
+      v_min_f16 v[vgpr0], s[sgpractivationBeta], v[vgpr0] dst_sel:WORD_1 dst_unused:UNUSED_PRESERVE src0_sel:WORD_1 src1_sel:WORD_1 // min(x, beta)
+      v_min_f16 v0, s[sgpractivationBeta], 0.0 dst_sel:WORD_1 dst_unused:UNUSED_PRESERVE src0_sel:WORD_1 src1_sel:WORD_1 // min(0, beta)
+      v_cndmask_b32 v[vgpr0], v0, v[vgpr0], vcc dst_sel:WORD_1 dst_unused:UNUSED_PRESERVE src0_sel:WORD_1 src1_sel:WORD_1 // set x to min(0, beta) if <= alpha
+      s_nop 0                                            // 1 wait states
+  
+    ''',
+    'gelu': '''
+      s_mov_b32 s0, 0x29b929b9                           // Float16GeluK1
+      s_mov_b32 s1, 0.79788458347320557
+      v_pk_mul_f16 v0, v[vgpr0], v[vgpr0]                // x * x
+      v_pk_fma_f16 v0, v0, s0, 1.0 op_sel_hi:[1,1,0,1]   // x^2 * k1 + 1
+      v_pk_mul_f16 v0, v[vgpr0], v0                      // x * (x^2 * k1 + 1)
+      v_pk_mul_f16 v0, s1, v0                            // k0 * x * (x^2 * k1 + 1)
+      v_pk_mul_f16 v0, 2, v0                             //  x = 2 * x
+      s_mov_b32 s2, 0x3dc53dc5                           // exp magic
+      v_pk_mul_f16 v0, s2, v0                            // exp step 1
+      v_exp_f16 v0, v0 dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:WORD_0 // exp step 2
+      s_nop 0                                            // 1 wait states
+      v_exp_f16 v0, v0 dst_sel:WORD_1 dst_unused:UNUSED_PRESERVE src0_sel:WORD_1 // exp step 2
+      s_nop 0                                            // 1 wait states
+      v_pk_add_f16 v0, 1.0, v0 op_sel_hi:[0,1,1]         // e^2x + 1
+      v_rcp_f16 v0, v0 dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:WORD_0 // 1 / (1 + exp(-x))
+      s_nop 0                                            // 1 wait states
+      v_rcp_f16 v0, v0 dst_sel:WORD_1 dst_unused:UNUSED_PRESERVE src0_sel:WORD_1 // 1 / (1 + exp(-x))
+      s_nop 0                                            // 1 wait states
+      v_pk_fma_f16 v0, -2.0, v0, 2.0                     //  ( + 1 (fused))
+      v_pk_mul_f16 v0, v[vgpr0], v0                      // x * (1 + tanh(...))
+      v_pk_mul_f16 v[vgpr0], 0.5, v0 op_sel_hi:[0,1,1]   // 0.5 * x * (1 + tanh(...))
+  
+    ''',
+    'geluscaling': '''
+      s_mov_b32 s0, 0x29b929b9                           // Float16GeluK1
+      s_mov_b32 s1, 0.79788458347320557
+      v_pk_mul_f16 v0, v[vgpr0], v[vgpr0]                // x * x
+      v_pk_fma_f16 v0, v0, s0, 1.0 op_sel_hi:[1,1,0,1]   // x^2 * k1 + 1
+      v_pk_mul_f16 v0, v[vgpr0], v0                      // x * (x^2 * k1 + 1)
+      v_pk_mul_f16 v0, s1, v0                            // k0 * x * (x^2 * k1 + 1)
+      v_pk_mul_f16 v0, 2, v0                             //  x = 2 * x
+      s_mov_b32 s2, 0x3dc53dc5                           // exp magic
+      v_pk_mul_f16 v0, s2, v0                            // exp step 1
+      v_exp_f16 v0, v0 dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:WORD_0 // exp step 2
+      s_nop 0                                            // 1 wait states
+      v_exp_f16 v0, v0 dst_sel:WORD_1 dst_unused:UNUSED_PRESERVE src0_sel:WORD_1 // exp step 2
+      s_nop 0                                            // 1 wait states
+      v_pk_add_f16 v0, 1.0, v0 op_sel_hi:[0,1,1]         // e^2x + 1
+      v_rcp_f16 v0, v0 dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:WORD_0 // 1 / (1 + exp(-x))
+      s_nop 0                                            // 1 wait states
+      v_rcp_f16 v0, v0 dst_sel:WORD_1 dst_unused:UNUSED_PRESERVE src0_sel:WORD_1 // 1 / (1 + exp(-x))
+      s_nop 0                                            // 1 wait states
+      v_pk_fma_f16 v0, -2.0, v0, 2.0                     //  ( + 1 (fused))
+      v_pk_mul_f16 v0, v[vgpr0], v0                      // x * (1 + tanh(...))
+      v_pk_mul_f16 v0, 0.5, v0 op_sel_hi:[0,1,1]         // 0.5 * x * (1 + tanh(...))
+      v_pk_mul_f16 v[vgpr0], s[sgpractivationAlpha], v0 op_sel_hi:[0,1,1] // 0.5 * x * (1 + tanh(...)) * scale
+  
+    ''',
+    'leakyrelu': '''
+      v_pk_mul_f16 v0, s[sgpractivationAlpha], v[vgpr0]  // tmp = x * alpha
+      v_cmp_ge_f16 vcc, v[vgpr0], 0.0 src0_sel:WORD_0 src1_sel:WORD_0 // x > 0 ?
+      v_cndmask_b32 v[vgpr0], v0, v[vgpr0], vcc dst_sel:WORD_0 dst_unused:UNUSED_PRESERVE src0_sel:WORD_0 src1_sel:WORD_0 // set x to tmp if < 0
+      v_cmp_ge_f16 vcc, v[vgpr0], 0.0 src0_sel:WORD_1 src1_sel:WORD_0 // x > 0 ?
+      v_cndmask_b32 v[vgpr0], v0, v[vgpr0], vcc dst_sel:WORD_1 dst_unused:UNUSED_PRESERVE src0_sel:WORD_1 src1_sel:WORD_1 // set x to tmp if < 0
+  
+    ''',
+  })
+# ---

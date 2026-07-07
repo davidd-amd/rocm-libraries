@@ -2,50 +2,59 @@
 # Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
 # SPDX-License-Identifier: MIT
 ################################################################################
-"""R14 -- half-precision Activation getModule pins the F7 defects.
+"""R14 -- half-precision Activation getModule emit (F7 fixed).
 
-Tensile/Activation.py's half/PK activation arms reference names never imported
-(SelectBit, UnusedBit, VMaxF16, SDWAModifiers, VOP3PModifiers) and use `coef`
-before assignment in the half gelu branch. Calling getModule(DataType('h'), ...)
-therefore raises NameError / UnboundLocalError for these activations.
+Tensile/Activation.py's half/PK activation arms referenced names never imported
+(SelectBit, UnusedBit, VMaxF16, SDWAModifiers, VOP3PModifiers) and used `coef`
+before assignment in the half gelu branch, so getModule(DataType('h'), ...) raised
+NameError / UnboundLocalError.
 
-This test PINS the CURRENT (defective) behavior. When the F7 fix lands (add the
-five missing rocisa imports and hoist `coef`), this test flips to assert these
-five activations build a non-empty Module (covering Activation.py half branches
-~507-523, 581-628, 911-924). The exp-family half paths (exp/sigmoid/tanh/silu/
-swish) are out of scope (blocked by the separate TransOpWait decision). See
-work/char-findings.md F7 and .handoff/.../remediation-plan.md.
+With the F7 fix (add the five missing rocisa imports and hoist the gelu `coef`
+assignment), the half activations build clean Modules. This pins the now-working
+behavior for clippedrelu/leakyrelu/clamp/gelu/geluscaling, covering ~+165
+previously-uncovered Activation.py half-path lines (incl. the half gelu/tanh/exp
+chain). See work/char-findings.md F7.
+
+Note: archCaps must be populated (real init + setKernel) -- a bare rocIsa.init
+leaves archCaps empty and gelu/geluscaling (via tanh->exp) hit a pre-existing
+TransOpWait KeyError unrelated to the F7 import/coef fix.
 """
+
+import shutil
 
 import pytest
 
 pytestmark = pytest.mark.unit
 
-# Activations whose half path the F7 import+coef fix unblocks.
 _FIXABLE = ["clippedrelu", "leakyrelu", "clamp", "gelu", "geluscaling"]
 
 
 def _init_gfx942():
-    from rocisa import rocIsa
-    rocIsa.getInstance().init((9, 4, 2), "", False)
+    import rocisa
+    asm = shutil.which("amdclang++") or "/usr/bin/amdclang++"
+    ri = rocisa.rocIsa.getInstance()
+    ri.init((9, 4, 2), asm)
+    ri.setKernel((9, 4, 2), 64)
 
 
-def test_r14_activation_half_pins_defect():
-    """Each fixable half activation currently raises NameError/UnboundLocalError."""
+def _build_half_modules():
     _init_gfx942()
     from Tensile.Activation import ActivationModule, ActivationType
     from Tensile.Common.DataType import DataType
+    return {
+        act: str(ActivationModule().getModule(DataType("h"), ActivationType(act), "0", "0"))
+        for act in _FIXABLE
+    }
 
-    failures = {}
+
+def test_r14_activation_half_emits_modules():
+    """Each fixable half activation builds a non-empty Module (no NameError/UnboundLocalError)."""
+    mods = _build_half_modules()
     for act in _FIXABLE:
-        try:
-            ActivationModule().getModule(DataType("h"), ActivationType(act), "0", "0")
-            failures[act] = "NO-RAISE"
-        except (NameError, UnboundLocalError):
-            pass
-        except Exception as e:  # noqa: BLE001 - pin only the documented defect classes
-            failures[act] = f"{type(e).__name__}: {e}"
-    assert not failures, (
-        "Expected NameError/UnboundLocalError (F7 defect) for all fixable half "
-        f"activations; got: {failures}"
-    )
+        assert mods[act] and len(mods[act]) > 0, f"{act} produced an empty module"
+
+
+def test_r14_activation_half_golden(snapshot):
+    """Golden: per-activation half Module emit (flips if the half codegen changes)."""
+    mods = _build_half_modules()
+    assert mods == snapshot
