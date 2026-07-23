@@ -178,64 +178,14 @@ if(HIPBLASLT_ENABLE_YAML)
     find_package(LLVM REQUIRED)
 endif()
 
-if(HIPBLASLT_ENABLE_DEVICE AND NOT WIN32)
-    if(HIPBLASLT_ENABLE_ASAN OR THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
-        set(_suffix "asan")
-        set(_clang_rt_names "libclang_rt.${_suffix}.so" "libclang_rt.${_suffix}-x86_64.so")
-        foreach(_clang_rt_name ${_clang_rt_names})
-            execute_process(
-                COMMAND ${CMAKE_CXX_COMPILER} --print-file-name=${_clang_rt_name}
-                OUTPUT_VARIABLE _clang_rt_path
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-                COMMAND_ERROR_IS_FATAL ANY
-            )
-            # If _clang_rt_path is libclang_rt.asan-x86_64.so
-            # rather than /path/to/libclang_rt.asan-x86_64.so then
-            # we failed to locate it.
-            if(IS_ABSOLUTE "${_clang_rt_path}" AND EXISTS "${_clang_rt_path}")
-                set(ASAN_LIB_PATH "${_clang_rt_path}")
-                break()
-            endif()
-        endforeach()
-        if(NOT ASAN_LIB_PATH)
-            message(FATAL_ERROR "Failed to locate libclang_rt.asan-x86_64.so or libclang_rt.asan.so")
-        endif()
-        # Disable a few asan options to get builds going but these should be addressed
-        set(san_opts "LD_PRELOAD=${ASAN_LIB_PATH}" "ASAN_OPTIONS=detect_leaks=0,new_delete_type_mismatch=0,malloc_context_size=0,quarantine_size_mb=0")
-    elseif(HIPBLASLT_ENABLE_TSAN OR THEROCK_SANITIZER STREQUAL "TSAN")
-        set(_suffix "tsan")
-        set(_clang_rt_names "libclang_rt.${_suffix}.so" "libclang_rt.${_suffix}-x86_64.so")
-        foreach(_clang_rt_name ${_clang_rt_names})
-            execute_process(
-                COMMAND ${CMAKE_CXX_COMPILER} --print-file-name=${_clang_rt_name}
-                OUTPUT_VARIABLE _clang_rt_path
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-                COMMAND_ERROR_IS_FATAL ANY
-            )
-            # If _clang_rt_path is libclang_rt.tsan-x86_64.so
-            # rather than /path/to/libclang_rt.tsan-x86_64.so then
-            # we failed to locate it.
-            if(IS_ABSOLUTE "${_clang_rt_path}" AND EXISTS "${_clang_rt_path}")
-                set(TSAN_LIB_PATH "${_clang_rt_path}")
-                break()
-            endif()
-        endforeach()
-        if(NOT TSAN_LIB_PATH)
-            message(FATAL_ERROR "Failed to locate libclang_rt.tsan-x86_64.so or libclang_rt.tsan.so")
-        endif()
-        # Disable a few tsan options to get builds going but these should be addressed
-        set(san_opts "LD_PRELOAD=${TSAN_LIB_PATH}" "TSAN_OPTIONS=detect_leaks=0,new_delete_type_mismatch=0")
-    endif()
-endif()
-
 if(HIPBLASLT_BUNDLE_PYTHON_DEPS)
     set(HIPBLASLT_PYTHON_DEPS "_rocisa")
     set(hipblaslt_python_dev Development.Module)
     hipblaslt_find_python("${hipblaslt_python_dev}")
-    hipblaslt_configure_bundled_python_command("${CMAKE_CURRENT_BINARY_DIR}/tensilelite/rocisa;${CMAKE_CURRENT_BINARY_DIR}/tensilelite" "${san_opts}")
+    hipblaslt_configure_bundled_python_command("${CMAKE_CURRENT_BINARY_DIR}/tensilelite/rocisa;${CMAKE_CURRENT_BINARY_DIR}/tensilelite")
 else()
     hipblaslt_find_python("${hipblaslt_python_dev}")
-    set(HIPBLASLT_PYTHON_COMMAND "${Python_EXECUTABLE}")
+    hipblaslt_make_python_command(HIPBLASLT_PYTHON_COMMAND)
 endif()
 
 if(HIPBLASLT_ENABLE_ROCROLLER)
@@ -490,7 +440,8 @@ if(HIPBLASLT_ENABLE_HOST)
     )
 
     install(
-        FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/HipBLASLtCodegen.cmake"
+        FILES
+            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/hipblaslt_codegen.cmake"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/hipblaslt"
         COMPONENT devel
     )
