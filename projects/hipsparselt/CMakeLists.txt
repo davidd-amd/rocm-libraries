@@ -205,13 +205,11 @@ if(HIPSPARSELT_ENABLE_HIP)
 
             set(_hipsparselt_tensile_out "${CMAKE_BINARY_DIR}/Tensile")
             set(_hipsparselt_codegen_flags "")
-            set(_hipsparselt_sanitizer_flags "")
             if(HIPSPARSELT_ENABLE_ASAN)
                 list(APPEND _hipsparselt_codegen_flags ASAN)
-                set(_hipsparselt_sanitizer_flags ASAN)
             endif()
             hipblaslt_detect_sanitizer_runtime(_hipsparselt_asan_options _hipsparselt_asan_lib_dirs
-                ${_hipsparselt_sanitizer_flags})
+                ${_hipsparselt_codegen_flags})
             hipblaslt_make_python_command(HIPBLASLT_PYTHON_COMMAND
                 PYTHONPATH_DIRS "$<TARGET_FILE_DIR:roc::tensilelite-host>/hipblaslt" "${HIPBLASLT_CODEGEN_ROOT}"
                 RUNTIME_LIB_DIRS "$<TARGET_FILE_DIR:roc::origami>" "${_hipsparselt_rocisa_dir}" ${_hipsparselt_asan_lib_dirs}
