@@ -103,9 +103,9 @@ endfunction()
 function(hipblaslt_create_device_library)
     set(_opts "")
     set(_one
-        TARGET LOGIC_PATH OUTPUT_DIR CXX_COMPILER OFFLOAD_BUNDLER JOBS LOGIC_FILTER PYTHON_COMMAND
+        TARGET LOGIC_PATH OUTPUT_DIR CXX_COMPILER OFFLOAD_BUNDLER JOBS LOGIC_FILTER
         ASAN YAML_FORMAT NO_COMPRESS EXPERIMENTAL LAZY_LOAD ASM_COMMENTS KEEP_BUILD_TMP ASM_DEBUG)
-    set(_multi ARCHES)
+    set(_multi ARCHES PYTHON_COMMAND)
     cmake_parse_arguments(_cdl "${_opts}" "${_one}" "${_multi}" ${ARGN})
 
     if(_cdl_UNPARSED_ARGUMENTS)
