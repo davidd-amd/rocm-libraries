@@ -19,6 +19,4 @@ block(SCOPE_FOR VARIABLES)
     endif()
 endblock()
 
-if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/hipblaslt_codegen.cmake")
-    include("${CMAKE_CURRENT_LIST_DIR}/hipblaslt_codegen.cmake")
-endif()
+include("${CMAKE_CURRENT_LIST_DIR}/hipblaslt_codegen.cmake")

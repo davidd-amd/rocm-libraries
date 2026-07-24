@@ -4,8 +4,9 @@
 include_guard(GLOBAL)
 
 function(hipblaslt_make_python_command out_command)
-    set(_multi PYTHONPATH_DIRS RUNTIME_LIB_DIRS TOOL_BIN_DIRS ENV_ASSIGNMENTS)
-    cmake_parse_arguments(arg "" "" "${_multi}" ${ARGN})
+    set(_options ASAN TSAN)
+    set(_multi PYTHONPATH_DIRS RUNTIME_LIB_DIRS TOOL_BIN_DIRS)
+    cmake_parse_arguments(arg "${_options}" "" "${_multi}" ${ARGN})
 
     if(NOT Python3_EXECUTABLE)
         message(FATAL_ERROR
@@ -13,25 +14,37 @@ function(hipblaslt_make_python_command out_command)
             "find_package(Python3) before invoking this function.")
     endif()
 
-    set(path_separator "$<IF:$<PLATFORM_ID:Windows>,$<SEMICOLON>,:>")
+    set(_sanitizer_flag "")
+    if(arg_ASAN)
+        set(_sanitizer_flag ASAN)
+    elseif(arg_TSAN)
+        set(_sanitizer_flag TSAN)
+    endif()
+    set(_sanitizer_options "")
+    set(_sanitizer_lib_dirs "")
+    if(_sanitizer_flag)
+        hipblaslt_detect_sanitizer_runtime(_sanitizer_options _sanitizer_lib_dirs ${_sanitizer_flag})
+    endif()
 
-    set(environment ${arg_ENV_ASSIGNMENTS})
+    set(path_separator "$<IF:$<PLATFORM_ID:Windows>,$<SEMICOLON>,:>")
+    set(environment ${_sanitizer_options})
 
     if(arg_PYTHONPATH_DIRS)
         list(JOIN arg_PYTHONPATH_DIRS "${path_separator}" python_path)
         list(APPEND environment "PYTHONPATH=${python_path}")
     endif()
 
+    set(_runtime_lib_dirs ${arg_RUNTIME_LIB_DIRS} ${_sanitizer_lib_dirs})
     set(base_path "$ENV{PATH}")
     if(WIN32)
         string(REPLACE ";" "${path_separator}" base_path "${base_path}")
-        set(path_entries ${arg_TOOL_BIN_DIRS} ${arg_RUNTIME_LIB_DIRS} "${base_path}")
+        set(path_entries ${arg_TOOL_BIN_DIRS} ${_runtime_lib_dirs} "${base_path}")
         list(JOIN path_entries "${path_separator}" base_path)
     else()
         set(path_entries ${arg_TOOL_BIN_DIRS} "${base_path}")
         list(JOIN path_entries ":" base_path)
-        if(arg_RUNTIME_LIB_DIRS)
-            list(JOIN arg_RUNTIME_LIB_DIRS ":" runtime_lib_path)
+        if(_runtime_lib_dirs)
+            list(JOIN _runtime_lib_dirs ":" runtime_lib_path)
             list(APPEND environment "LD_LIBRARY_PATH=${runtime_lib_path}")
         endif()
     endif()
@@ -42,10 +55,6 @@ function(hipblaslt_make_python_command out_command)
         PARENT_SCOPE)
 endfunction()
 
-# Resolves the sanitizer runtime for the active build, returning the env
-# assignments (LD_PRELOAD + options) in out_options and the directory holding
-# the runtime in out_lib_dirs. Both are empty when no sanitizer is selected.
-# The caller declares the active sanitizer via the ASAN or TSAN flag.
 function(hipblaslt_detect_sanitizer_runtime out_options out_lib_dirs)
     cmake_parse_arguments(arg "ASAN;TSAN" "" "" ${ARGN})
     set(_options "")
@@ -94,7 +103,7 @@ endfunction()
 function(hipblaslt_create_device_library)
     set(_opts "")
     set(_one
-        TARGET LOGIC_PATH OUTPUT_DIR CXX_COMPILER OFFLOAD_BUNDLER JOBS LOGIC_FILTER
+        TARGET LOGIC_PATH OUTPUT_DIR CXX_COMPILER OFFLOAD_BUNDLER JOBS LOGIC_FILTER PYTHON_COMMAND
         ASAN YAML_FORMAT NO_COMPRESS EXPERIMENTAL LAZY_LOAD ASM_COMMENTS KEEP_BUILD_TMP ASM_DEBUG)
     set(_multi ARCHES)
     cmake_parse_arguments(_cdl "${_opts}" "${_one}" "${_multi}" ${ARGN})
@@ -109,11 +118,10 @@ function(hipblaslt_create_device_library)
         message(FATAL_ERROR "hipblaslt_create_device_library: OUTPUT_DIR is required")
     endif()
 
-    if(NOT HIPBLASLT_PYTHON_COMMAND)
+    if(NOT _cdl_PYTHON_COMMAND)
         message(FATAL_ERROR
-            "hipblaslt_create_device_library: HIPBLASLT_PYTHON_COMMAND is not set; call "
-            "hipblaslt_make_python_command() (or hipblaslt_configure_bundled_python_command()) "
-            "to set it before invoking codegen.")
+            "hipblaslt_create_device_library: PYTHON_COMMAND is required; build it with "
+            "hipblaslt_make_python_command() and pass it via the PYTHON_COMMAND argument.")
     endif()
 
     if(HIPBLASLT_CODEGEN_ROOT)
@@ -181,7 +189,7 @@ function(hipblaslt_create_device_library)
     add_custom_command(
         OUTPUT "${_logic_stamp}"
         COMMENT "Validating library logic (TensileLogic --check-all) for ${_cdl_TARGET} ..."
-        COMMAND ${HIPBLASLT_PYTHON_COMMAND}
+        COMMAND ${_cdl_PYTHON_COMMAND}
             "${_codegen_dir}/Tensile/bin/TensileLogic"
             "${_cdl_LOGIC_PATH}"
             --architecture
@@ -197,7 +205,7 @@ function(hipblaslt_create_device_library)
 
     set(_output_stamp "${CMAKE_CURRENT_BINARY_DIR}/${_cdl_TARGET}.stamp")
     set(_tcl_command
-        ${HIPBLASLT_PYTHON_COMMAND} -m Tensile.TensileCreateLibrary
+        ${_cdl_PYTHON_COMMAND} -m Tensile.TensileCreateLibrary
         ${_opts_list}
         "${_cdl_LOGIC_PATH}"
         "${_cdl_OUTPUT_DIR}"

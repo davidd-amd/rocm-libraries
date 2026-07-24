@@ -25,11 +25,9 @@ function(hipblaslt_configure_bundled_python_command python_binary_dir)
             set(_sanitizer_flags TSAN)
         endif()
     endif()
-    hipblaslt_detect_sanitizer_runtime(_asan_options _runtime_lib_dirs ${_sanitizer_flags})
     hipblaslt_make_python_command(_python_command
         PYTHONPATH_DIRS ${python_binary_dir} "${hipblaslt_SOURCE_DIR}/tensilelite"
-        RUNTIME_LIB_DIRS ${_runtime_lib_dirs}
-        ENV_ASSIGNMENTS ${_asan_options}
+        ${_sanitizer_flags}
     )
     message(VERBOSE "Python command: ${_python_command}")
     set(HIPBLASLT_PYTHON_COMMAND "${_python_command}" PARENT_SCOPE)

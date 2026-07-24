@@ -190,13 +190,11 @@ if(HIPSPARSELT_ENABLE_HIP)
             if(HIPSPARSELT_ENABLE_ASAN)
                 list(APPEND _hipsparselt_codegen_flags ASAN)
             endif()
-            hipblaslt_detect_sanitizer_runtime(_hipsparselt_asan_options _hipsparselt_asan_lib_dirs
-                ${_hipsparselt_codegen_flags})
             hipblaslt_make_python_command(HIPBLASLT_PYTHON_COMMAND
                 PYTHONPATH_DIRS "$<TARGET_FILE_DIR:roc::tensilelite-host>/hipblaslt" "${HIPBLASLT_CODEGEN_ROOT}"
-                RUNTIME_LIB_DIRS "$<TARGET_FILE_DIR:roc::origami>" "${_hipsparselt_rocisa_dir}" ${_hipsparselt_asan_lib_dirs}
+                RUNTIME_LIB_DIRS "$<TARGET_FILE_DIR:roc::origami>" "${_hipsparselt_rocisa_dir}"
                 TOOL_BIN_DIRS "${_hipsparselt_hip_bindir}" "${_hipsparselt_cxx_bindir}"
-                ENV_ASSIGNMENTS ${_hipsparselt_asan_options}
+                ${_hipsparselt_codegen_flags}
             )
             hipblaslt_create_device_library(
                 TARGET tensilelite-device-libraries
@@ -204,6 +202,7 @@ if(HIPSPARSELT_ENABLE_HIP)
                 OUTPUT_DIR "${_hipsparselt_tensile_out}"
                 ARCHES ${GPU_TARGETS}
                 CXX_COMPILER "${CMAKE_CXX_COMPILER}"
+                PYTHON_COMMAND "${HIPBLASLT_PYTHON_COMMAND}"
                 ${_hipsparselt_codegen_flags}
             )
 

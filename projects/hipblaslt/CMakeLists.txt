@@ -440,8 +440,7 @@ if(HIPBLASLT_ENABLE_HOST)
     )
 
     install(
-        FILES
-            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/hipblaslt_codegen.cmake"
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/hipblaslt_codegen.cmake"
         DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/hipblaslt"
         COMPONENT devel
     )
