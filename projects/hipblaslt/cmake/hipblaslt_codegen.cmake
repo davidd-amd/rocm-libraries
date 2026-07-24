@@ -45,19 +45,15 @@ endfunction()
 # Resolves the sanitizer runtime for the active build, returning the env
 # assignments (LD_PRELOAD + options) in out_options and the directory holding
 # the runtime in out_lib_dirs. Both are empty when no sanitizer is selected.
-# The caller declares the active sanitizer via the ASAN or TSAN flag and may
-# override the compiler used to locate the runtime with COMPILER.
+# The caller declares the active sanitizer via the ASAN or TSAN flag.
 function(hipblaslt_detect_sanitizer_runtime out_options out_lib_dirs)
-    cmake_parse_arguments(arg "ASAN;TSAN" "COMPILER" "" ${ARGN})
-    if(NOT arg_COMPILER)
-        set(arg_COMPILER "${CMAKE_CXX_COMPILER}")
-    endif()
+    cmake_parse_arguments(arg "ASAN;TSAN" "" "" ${ARGN})
     set(_options "")
     set(_lib_dirs "")
     if(NOT WIN32)
         if(arg_ASAN)
             execute_process(
-                COMMAND ${arg_COMPILER} --print-file-name=libclang_rt.asan-x86_64.so
+                COMMAND ${CMAKE_CXX_COMPILER} --print-file-name=libclang_rt.asan-x86_64.so
                 OUTPUT_VARIABLE ASAN_LIB_PATH
                 OUTPUT_STRIP_TRAILING_WHITESPACE
                 COMMAND_ERROR_IS_FATAL ANY
@@ -74,7 +70,7 @@ function(hipblaslt_detect_sanitizer_runtime out_options out_lib_dirs)
             cmake_path(GET ASAN_LIB_PATH PARENT_PATH _lib_dirs)
         elseif(arg_TSAN)
             execute_process(
-                COMMAND ${arg_COMPILER} --print-file-name=libclang_rt.tsan-x86_64.so
+                COMMAND ${CMAKE_CXX_COMPILER} --print-file-name=libclang_rt.tsan-x86_64.so
                 OUTPUT_VARIABLE TSAN_LIB_PATH
                 OUTPUT_STRIP_TRAILING_WHITESPACE
                 COMMAND_ERROR_IS_FATAL ANY
