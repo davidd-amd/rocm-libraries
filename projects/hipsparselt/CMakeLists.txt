@@ -191,7 +191,7 @@ if(HIPSPARSELT_ENABLE_HIP)
                 list(APPEND _hipsparselt_codegen_flags ASAN)
             endif()
             hipblaslt_make_python_command(HIPBLASLT_PYTHON_COMMAND
-                PYTHONPATH_DIRS "$<TARGET_FILE_DIR:roc::tensilelite-host>/hipblaslt" "${HIPBLASLT_CODEGEN_ROOT}"
+                PYTHONPATH_DIRS "$<IF:$<PLATFORM_ID:Windows>,$<TARGET_FILE_DIR:roc::tensilelite-host>/../lib/hipblaslt,$<TARGET_FILE_DIR:roc::tensilelite-host>/hipblaslt>" "${HIPBLASLT_CODEGEN_ROOT}"
                 RUNTIME_LIB_DIRS "$<TARGET_FILE_DIR:roc::origami>" "${_hipsparselt_rocisa_dir}"
                 TOOL_BIN_DIRS "${_hipsparselt_hip_bindir}" "${_hipsparselt_cxx_bindir}"
                 ${_hipsparselt_codegen_flags}
@@ -203,12 +203,17 @@ if(HIPSPARSELT_ENABLE_HIP)
                 ARCHES ${GPU_TARGETS}
                 CXX_COMPILER "${CMAKE_CXX_COMPILER}"
                 PYTHON_COMMAND "${HIPBLASLT_PYTHON_COMMAND}"
-                ${_hipsparselt_codegen_flags}
+                ASAN "${HIPSPARSELT_ENABLE_ASAN}"
             )
 
+            if(WIN32)
+                set(_hipsparselt_tensile_install_dir "${CMAKE_INSTALL_BINDIR}/hipsparselt")
+            else()
+                set(_hipsparselt_tensile_install_dir "${CMAKE_INSTALL_LIBDIR}/hipsparselt")
+            endif()
             install(
                 DIRECTORY "${_hipsparselt_tensile_out}/library"
-                DESTINATION "${CMAKE_INSTALL_LIBDIR}/hipsparselt"
+                DESTINATION "${_hipsparselt_tensile_install_dir}"
                 COMPONENT runtime
             )
         endif()

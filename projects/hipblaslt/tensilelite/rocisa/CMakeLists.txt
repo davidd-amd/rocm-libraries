@@ -348,7 +348,7 @@ if(HIPBLASLT_BUNDLE_PYTHON_DEPS OR ROCISA_STANDALONE)
             # A static stinkytofu is already inside _rocisa, and TARGET_SONAME_FILE below
             # is only valid for SHARED targets.
             install(FILES $<TARGET_FILE:stinkytofu::stinkytofu> DESTINATION rocisa)
-            if(NOT WIN32)
+            if(NOT WIN32 AND BUILD_SHARED_LIBS)
                 install(FILES $<TARGET_SONAME_FILE:stinkytofu::stinkytofu> DESTINATION rocisa)
             endif()
         endif()
@@ -366,8 +366,10 @@ if(HIPBLASLT_BUNDLE_PYTHON_DEPS OR ROCISA_STANDALONE)
             # INSTALL_RPATH=$ORIGIN (set above) resolves it at import time.
             install(FILES $<TARGET_FILE:stinkytofu::stinkytofu>
                 DESTINATION "${_rocisa_install_dir}" COMPONENT runtime)
-            install(FILES $<TARGET_SONAME_FILE:stinkytofu::stinkytofu>
-                DESTINATION "${_rocisa_install_dir}" COMPONENT runtime)
+            if(BUILD_SHARED_LIBS)
+                install(FILES $<TARGET_SONAME_FILE:stinkytofu::stinkytofu>
+                    DESTINATION "${_rocisa_install_dir}" COMPONENT runtime)
+            endif()
         endif()
     endif()
 
