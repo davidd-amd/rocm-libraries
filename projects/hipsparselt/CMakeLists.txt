@@ -167,15 +167,6 @@ if(HIPSPARSELT_ENABLE_HIP)
         )
 
         if(HIPSPARSELT_ENABLE_DEVICE)
-            # hipSPARSELt ships its own sparse Tensile logic and generates its device
-            # libraries (.co/.dat) by calling hipBLASLt's exported
-            # hipblaslt_create_device_library() against the binary hipBLASLt package,
-            # instead of add_subdirectory(hipblaslt).
-            #
-            # The Tensile codegen Python lives in the hipBLASLt source tree (same repo,
-            # deliberately not installed); the compiled rocisa extension IS installed
-            # with hipBLASLt (lib/hipblaslt/rocisa), so its directory is derived from
-            # the imported roc::tensilelite-host target's location.
             if(NOT HIPBLASLT_TENSILELITE_PATH)
                 set(HIPBLASLT_TENSILELITE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../hipblaslt/tensilelite")
             endif()
@@ -186,20 +177,11 @@ if(HIPSPARSELT_ENABLE_HIP)
             endif()
             set(HIPBLASLT_CODEGEN_ROOT "${HIPBLASLT_TENSILELITE_PATH}")
 
-            # The installed _rocisa extension has DT_NEEDED on liborigami (linked
-            # PUBLIC) and libstinkytofu; its INSTALL_RPATH ($ORIGIN) only covers the
-            # vendored stinkytofu beside it. Since the super-project resolves each
-            # dependency from its own dist dir (not one merged prefix), an RPATH cannot
-            # span them, so put origami's and rocisa's dirs on LD_LIBRARY_PATH for the
-            # codegen subprocess. libamdhip64 is already resolvable from the build env.
             find_package(origami CONFIG REQUIRED)
             find_package(hip REQUIRED)
 
             find_package(Python3 COMPONENTS Interpreter REQUIRED)
             set(_hipsparselt_rocisa_dir "$<TARGET_FILE_DIR:roc::tensilelite-host>/hipblaslt/rocisa")
-            # Tensile's toolchain validator resolves hipconfig (and clang) from PATH;
-            # provide the hip runtime bin dir and the compiler dir so the codegen
-            # subprocess finds them (mirrors hipBLASLt's own bundled-python PATH).
             get_filename_component(_hipsparselt_hip_bindir "${hip_DIR}/../../../bin" ABSOLUTE)
             get_filename_component(_hipsparselt_cxx_bindir "${CMAKE_CXX_COMPILER}" DIRECTORY)
 
