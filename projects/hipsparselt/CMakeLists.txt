@@ -180,8 +180,7 @@ if(HIPSPARSELT_ENABLE_HIP)
             find_package(origami CONFIG REQUIRED)
             find_package(hip REQUIRED)
 
-            find_package(Python3 COMPONENTS Interpreter REQUIRED)
-            set(_hipsparselt_rocisa_dir "$<TARGET_FILE_DIR:roc::tensilelite-host>/hipblaslt/rocisa")
+            set(_hipsparselt_rocisa_dir "$<IF:$<PLATFORM_ID:Windows>,$<TARGET_FILE_DIR:roc::tensilelite-host>/../lib/hipblaslt/rocisa,$<TARGET_FILE_DIR:roc::tensilelite-host>/hipblaslt/rocisa>")
             get_filename_component(_hipsparselt_hip_bindir "${hip_DIR}/../../../bin" ABSOLUTE)
             get_filename_component(_hipsparselt_cxx_bindir "${CMAKE_CXX_COMPILER}" DIRECTORY)
 
@@ -196,6 +195,14 @@ if(HIPSPARSELT_ENABLE_HIP)
                 TOOL_BIN_DIRS "${_hipsparselt_hip_bindir}" "${_hipsparselt_cxx_bindir}"
                 ${_hipsparselt_codegen_flags}
             )
+            set(TENSILELITE_BUILD_PARALLEL_LEVEL "" CACHE STRING "Number of CPU cores to use for building device libraries (will use nproc if unset).")
+            set(TENSILELITE_KEEP_BUILD_TMP OFF CACHE STRING "Keep temporary build directory for device libraries (turning this ON  bloat the build size).")
+            set(TENSILELITE_ASM_DEBUG "" CACHE STRING "Keep debug information for built code objects.")
+            set(TENSILELITE_LOGIC_FILTER "" CACHE STRING "Cutomsized logic filter, default is *, i.e. all logics.")
+            set(TENSILELITE_NO_COMPRESS "" CACHE STRING "Do not compress device code object files.")
+            set(TENSILELITE_EXPERIMENTAL "" CACHE STRING "Process experimental logic files.")
+            set(TENSILELITE_ENABLE_ASM_COMMENTS OFF CACHE STRING "Turn on asm comments when building gemm libraries.")
+            set(TENSILELITE_OFFLOADBUNDLER "" CACHE STRING "Path to clang-offload-bundler.")
             hipblaslt_create_device_library(
                 TARGET tensilelite-device-libraries
                 LOGIC_PATH "${CMAKE_CURRENT_SOURCE_DIR}/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full"
@@ -203,7 +210,15 @@ if(HIPSPARSELT_ENABLE_HIP)
                 ARCHES ${GPU_TARGETS}
                 CXX_COMPILER "${CMAKE_CXX_COMPILER}"
                 PYTHON_COMMAND "${HIPBLASLT_PYTHON_COMMAND}"
+                OFFLOAD_BUNDLER "${TENSILELITE_OFFLOADBUNDLER}"
+                JOBS "${TENSILELITE_BUILD_PARALLEL_LEVEL}"
+                LOGIC_FILTER "${TENSILELITE_LOGIC_FILTER}"
                 ASAN "${HIPSPARSELT_ENABLE_ASAN}"
+                NO_COMPRESS "${TENSILELITE_NO_COMPRESS}"
+                EXPERIMENTAL "${TENSILELITE_EXPERIMENTAL}"
+                ASM_COMMENTS "${TENSILELITE_ENABLE_ASM_COMMENTS}"
+                KEEP_BUILD_TMP "${TENSILELITE_KEEP_BUILD_TMP}"
+                ASM_DEBUG "${TENSILELITE_ASM_DEBUG}"
             )
 
             if(WIN32)

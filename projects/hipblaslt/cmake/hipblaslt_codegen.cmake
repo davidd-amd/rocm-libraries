@@ -9,9 +9,7 @@ function(hipblaslt_make_python_command out_command)
     cmake_parse_arguments(arg "${_options}" "" "${_multi}" ${ARGN})
 
     if(NOT Python3_EXECUTABLE)
-        message(FATAL_ERROR
-            "hipblaslt_make_python_command: Python3_EXECUTABLE is not set; call "
-            "find_package(Python3) before invoking this function.")
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
     endif()
 
     set(_sanitizer_flag "")
@@ -71,12 +69,11 @@ function(hipblaslt_detect_sanitizer_runtime out_options out_lib_dirs)
             # rather than /path/to/libclang_rt.asan-x86_64.so then
             # we failed to locate it and HAS_PARENT_PATH is false.
             cmake_path(HAS_PARENT_PATH ASAN_LIB_PATH result)
-            if(NOT result)
-                message(FATAL_ERROR "Failed to locate libclang_rt.asan-x86_64.so ")
-            endif()
             # Disable a few asan options to get builds going but these should be addressed
             set(_options "LD_PRELOAD=${ASAN_LIB_PATH}" "ASAN_OPTIONS=detect_leaks=0,new_delete_type_mismatch=0,malloc_context_size=0,quarantine_size_mb=0")
-            cmake_path(GET ASAN_LIB_PATH PARENT_PATH _lib_dirs)
+            if(result)
+                cmake_path(GET ASAN_LIB_PATH PARENT_PATH _lib_dirs)
+            endif()
         elseif(arg_TSAN)
             execute_process(
                 COMMAND ${CMAKE_CXX_COMPILER} --print-file-name=libclang_rt.tsan-x86_64.so
@@ -88,12 +85,11 @@ function(hipblaslt_detect_sanitizer_runtime out_options out_lib_dirs)
             # rather than /path/to/libclang_rt.tsan-x86_64.so then
             # we failed to locate it and HAS_PARENT_PATH is false.
             cmake_path(HAS_PARENT_PATH TSAN_LIB_PATH result)
-            if(NOT result)
-                message(FATAL_ERROR "Failed to locate libclang_rt.tsan-x86_64.so ")
-            endif()
             # Disable a few tsan options to get builds going but these should be addressed
             set(_options "LD_PRELOAD=${TSAN_LIB_PATH}" "TSAN_OPTIONS=detect_leaks=0,new_delete_type_mismatch=0")
-            cmake_path(GET TSAN_LIB_PATH PARENT_PATH _lib_dirs)
+            if(result)
+                cmake_path(GET TSAN_LIB_PATH PARENT_PATH _lib_dirs)
+            endif()
         endif()
     endif()
     set(${out_options} "${_options}" PARENT_SCOPE)
