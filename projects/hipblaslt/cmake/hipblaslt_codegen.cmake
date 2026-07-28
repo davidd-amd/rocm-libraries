@@ -53,42 +53,47 @@ function(hipblaslt_make_python_command out_command)
         PARENT_SCOPE)
 endfunction()
 
+function(hipblaslt_find_sanitizer_runtime_lib out_lib stem)
+    set(${out_lib} "" PARENT_SCOPE)
+    if(stem STREQUAL "asan")
+        set(_flag "-fsanitize=address")
+    elseif(stem STREQUAL "tsan")
+        set(_flag "-fsanitize=thread")
+    else()
+        return()
+    endif()
+    execute_process(
+        COMMAND ${CMAKE_CXX_COMPILER} ${_flag} -shared-libsan -x c /dev/null "-###"
+        OUTPUT_VARIABLE _out
+        ERROR_VARIABLE _err
+    )
+    string(REGEX MATCHALL "/[^ \t\r\n\"]*libclang_rt\\.${stem}(-[A-Za-z0-9_]+)?\\.so" _hits "${_out}${_err}")
+    if(_hits)
+        list(GET _hits 0 _lib)
+        if(EXISTS "${_lib}")
+            set(${out_lib} "${_lib}" PARENT_SCOPE)
+        endif()
+    endif()
+endfunction()
+
 function(hipblaslt_detect_sanitizer_runtime out_options out_lib_dirs)
     cmake_parse_arguments(arg "ASAN;TSAN" "" "" ${ARGN})
     set(_options "")
     set(_lib_dirs "")
     if(NOT WIN32)
         if(arg_ASAN)
-            execute_process(
-                COMMAND ${CMAKE_CXX_COMPILER} --print-file-name=libclang_rt.asan-x86_64.so
-                OUTPUT_VARIABLE ASAN_LIB_PATH
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-                COMMAND_ERROR_IS_FATAL ANY
-            )
-            # If ASAN_LIB_PATH is libclang_rt.asan-x86_64.so
-            # rather than /path/to/libclang_rt.asan-x86_64.so then
-            # we failed to locate it and HAS_PARENT_PATH is false.
-            cmake_path(HAS_PARENT_PATH ASAN_LIB_PATH result)
-            # Disable a few asan options to get builds going but these should be addressed
-            set(_options "LD_PRELOAD=${ASAN_LIB_PATH}" "ASAN_OPTIONS=detect_leaks=0,new_delete_type_mismatch=0,malloc_context_size=0,quarantine_size_mb=0")
-            if(result)
-                cmake_path(GET ASAN_LIB_PATH PARENT_PATH _lib_dirs)
+            hipblaslt_find_sanitizer_runtime_lib(_asan_lib asan)
+            if(_asan_lib)
+                # Disable a few asan options to get builds going but these should be addressed
+                set(_options "LD_PRELOAD=${_asan_lib}" "ASAN_OPTIONS=detect_leaks=0,new_delete_type_mismatch=0,malloc_context_size=0,quarantine_size_mb=0")
+                cmake_path(GET _asan_lib PARENT_PATH _lib_dirs)
             endif()
         elseif(arg_TSAN)
-            execute_process(
-                COMMAND ${CMAKE_CXX_COMPILER} --print-file-name=libclang_rt.tsan-x86_64.so
-                OUTPUT_VARIABLE TSAN_LIB_PATH
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-                COMMAND_ERROR_IS_FATAL ANY
-            )
-            # If TSAN_LIB_PATH is libclang_rt.tsan-x86_64.so
-            # rather than /path/to/libclang_rt.tsan-x86_64.so then
-            # we failed to locate it and HAS_PARENT_PATH is false.
-            cmake_path(HAS_PARENT_PATH TSAN_LIB_PATH result)
-            # Disable a few tsan options to get builds going but these should be addressed
-            set(_options "LD_PRELOAD=${TSAN_LIB_PATH}" "TSAN_OPTIONS=detect_leaks=0,new_delete_type_mismatch=0")
-            if(result)
-                cmake_path(GET TSAN_LIB_PATH PARENT_PATH _lib_dirs)
+            hipblaslt_find_sanitizer_runtime_lib(_tsan_lib tsan)
+            if(_tsan_lib)
+                # Disable a few tsan options to get builds going but these should be addressed
+                set(_options "LD_PRELOAD=${_tsan_lib}" "TSAN_OPTIONS=detect_leaks=0,new_delete_type_mismatch=0")
+                cmake_path(GET _tsan_lib PARENT_PATH _lib_dirs)
             endif()
         endif()
     endif()
