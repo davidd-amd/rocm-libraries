@@ -42,6 +42,44 @@ add_executable(tablegen_inst_gen
 target_link_libraries(tablegen_inst_gen PRIVATE stinkytofu-warnings)
 # No link to gfxisa - this executable only parses .def files and writes .inc
 
+set(_tablegen_sanitizer_stem "")
+set(_tablegen_sanitizer_flag "")
+if(THEROCK_SANITIZER STREQUAL "ASAN" OR THEROCK_SANITIZER STREQUAL "HOST_ASAN")
+    set(_tablegen_sanitizer_stem asan)
+    set(_tablegen_sanitizer_flag "-fsanitize=address")
+elseif(THEROCK_SANITIZER STREQUAL "TSAN")
+    set(_tablegen_sanitizer_stem tsan)
+    set(_tablegen_sanitizer_flag "-fsanitize=thread")
+endif()
+if(_tablegen_sanitizer_stem AND NOT WIN32)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(WARNING
+            "\n"
+            "################################################################\n"
+            "  stinkytofu tablegen sanitizer build requested with a non-Clang\n"
+            "  compiler CMAKE_CXX_COMPILER_ID=${CMAKE_CXX_COMPILER_ID}. The\n"
+            "  libclang_rt runtime probe only supports Clang; the sanitizer\n"
+            "  runtime rpath will NOT be added and the tools may fail to load\n"
+            "  their runtime. Configure with a Clang/amdclang toolchain.\n"
+            "################################################################")
+    else()
+        execute_process(
+            COMMAND ${CMAKE_CXX_COMPILER} ${_tablegen_sanitizer_flag} -shared-libsan -x c /dev/null "-###"
+            OUTPUT_VARIABLE _tablegen_sanitizer_out
+            ERROR_VARIABLE _tablegen_sanitizer_err
+        )
+        string(REGEX MATCHALL "/[^ \t\r\n\"]*libclang_rt\\.${_tablegen_sanitizer_stem}(-[A-Za-z0-9_]+)?\\.so" _tablegen_sanitizer_hits "${_tablegen_sanitizer_out}${_tablegen_sanitizer_err}")
+        if(_tablegen_sanitizer_hits)
+            list(GET _tablegen_sanitizer_hits 0 _tablegen_sanitizer_runtime)
+            if(EXISTS "${_tablegen_sanitizer_runtime}")
+                get_filename_component(_tablegen_sanitizer_runtime_dir "${_tablegen_sanitizer_runtime}" DIRECTORY)
+                set_property(TARGET tablegen tablegen_inst_gen
+                    APPEND PROPERTY BUILD_RPATH "${_tablegen_sanitizer_runtime_dir}")
+            endif()
+        endif()
+    endif()
+endif()
+
 target_include_directories(tablegen PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../../hardware/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../include"

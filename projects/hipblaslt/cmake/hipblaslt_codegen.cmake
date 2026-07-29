@@ -81,6 +81,18 @@ function(hipblaslt_detect_sanitizer_runtime out_options out_lib_dirs)
     set(_options "")
     set(_lib_dirs "")
     if(NOT WIN32)
+        if((arg_ASAN OR arg_TSAN) AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+            message(WARNING
+                "\n"
+                "################################################################\n"
+                "  hipblaslt sanitizer build requested with a non-Clang compiler\n"
+                "  CMAKE_CXX_COMPILER_ID=${CMAKE_CXX_COMPILER_ID}\n"
+                "  The LD_PRELOAD runtime probe only supports Clang's libclang_rt\n"
+                "  sanitizer runtime; no runtime will be preloaded and the\n"
+                "  sanitizer will NOT be active. Configure with a Clang/amdclang\n"
+                "  toolchain to enable HOST_ASAN/HOST_TSAN.\n"
+                "################################################################")
+        endif()
         if(arg_ASAN)
             hipblaslt_find_sanitizer_runtime_lib(_asan_lib asan)
             if(_asan_lib)
