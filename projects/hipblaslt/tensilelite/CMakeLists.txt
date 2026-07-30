@@ -100,7 +100,7 @@ if(TENSILELITE_ENABLE_HOST)
     target_link_libraries(tensilelite-host
         PUBLIC
             $<BUILD_INTERFACE:rocisa::rocisa-cpp>
-            $<BUILD_INTERFACE:roc::origami>
+            roc::origami
             $<BUILD_INTERFACE:hip::host>
         PRIVATE
             hip::device

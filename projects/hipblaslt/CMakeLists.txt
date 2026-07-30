@@ -238,7 +238,14 @@ if(NOT ROCM_LIBS_SUPERBUILD)
             set(ORIGAMI_ENABLE_PYTHON OFF)
             set(BUILD_TESTING OFF)
             set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
-            add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../shared/origami" "${CMAKE_CURRENT_BINARY_DIR}/origami" EXCLUDE_FROM_ALL)
+            # origami is part of hipBLASLt's installed public interface: exported
+            # headers such as Tensile/hip/HipHardware.hpp include <origami/*.hpp>
+            # and expose origami types, and hipblaslt-config.cmake.in issues
+            # find_dependency(origami). Build it as part of `all` (no
+            # EXCLUDE_FROM_ALL) so origami's own install/export rules run and it
+            # ships as a package, matching the superbuild and TheRock modes where
+            # origami is already provided as a standalone package.
+            add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../shared/origami" "${CMAKE_CURRENT_BINARY_DIR}/origami")
         endblock()
     endif()
 endif()
