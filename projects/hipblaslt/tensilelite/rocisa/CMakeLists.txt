@@ -361,12 +361,18 @@ if(HIPBLASLT_BUNDLE_PYTHON_DEPS OR ROCISA_STANDALONE)
         install(TARGETS _rocisa DESTINATION "${_rocisa_install_dir}" COMPONENT runtime)
         install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/rocisa/__init__.py"
             DESTINATION "${_rocisa_install_dir}" COMPONENT runtime)
-        if(_stinkytofu_from_subdirectory AND NOT WIN32)
-            # Bundled stinkytofu: vendor libstinkytofu next to _rocisa; _rocisa's
-            # INSTALL_RPATH=$ORIGIN (set above) resolves it at import time.
+        if(_stinkytofu_from_subdirectory AND BUILD_SHARED_LIBS)
+            # Bundled shared stinkytofu: vendor it next to _rocisa. On Linux
+            # _rocisa's INSTALL_RPATH=$ORIGIN (set above) resolves it; on Windows
+            # the loader searches the module's own directory (registered via
+            # os.add_dll_directory() in __init__.py), so the DLL must sit here too.
+            # hipBLASLt packaging is component-scoped (COMPONENT runtime); stinkytofu's
+            # own install is Unspecified-component, so it would otherwise be dropped.
             install(FILES $<TARGET_FILE:stinkytofu::stinkytofu>
                 DESTINATION "${_rocisa_install_dir}" COMPONENT runtime)
-            if(BUILD_SHARED_LIBS)
+            if(NOT WIN32)
+                # Linux soname symlink (libstinkytofu.so.0); _rocisa's DT_NEEDED
+                # references it. Invalid for a Windows .dll, so guarded.
                 install(FILES $<TARGET_SONAME_FILE:stinkytofu::stinkytofu>
                     DESTINATION "${_rocisa_install_dir}" COMPONENT runtime)
             endif()

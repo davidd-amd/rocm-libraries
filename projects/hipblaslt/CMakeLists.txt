@@ -664,16 +664,20 @@ if(HIPBLASLT_INSTALL_TENSILELITE_TEST_ARTIFACTS AND NOT WIN32)
             COMPONENT tests
         )
     endif()
-    # Co-install stinkytofu shared library next to _rocisa
-    if(TARGET stinkytofu AND NOT WIN32)
+    # Co-install stinkytofu shared library next to _rocisa. TARGET_FILE lands on
+    # all platforms (stinkytofu.dll on Windows); the soname symlink is Linux-only
+    # and invalid for a .dll, so it is guarded.
+    if(TARGET stinkytofu AND BUILD_SHARED_LIBS)
         install(FILES $<TARGET_FILE:stinkytofu>
             DESTINATION "${_tensilelite_install_dest}/rocisa"
             COMPONENT tests
         )
-        install(FILES $<TARGET_SONAME_FILE:stinkytofu>
-            DESTINATION "${_tensilelite_install_dest}/rocisa"
-            COMPONENT tests
-        )
+        if(NOT WIN32)
+            install(FILES $<TARGET_SONAME_FILE:stinkytofu>
+                DESTINATION "${_tensilelite_install_dest}/rocisa"
+                COMPONENT tests
+            )
+        endif()
     endif()
 
     # rocisa tests

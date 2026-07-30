@@ -203,9 +203,26 @@ if(HIPSPARSELT_ENABLE_HIP)
             set(TENSILELITE_EXPERIMENTAL "" CACHE STRING "Process experimental logic files.")
             set(TENSILELITE_ENABLE_ASM_COMMENTS OFF CACHE STRING "Turn on asm comments when building gemm libraries.")
             set(TENSILELITE_OFFLOADBUNDLER "" CACHE STRING "Path to clang-offload-bundler.")
+            set(TENSILELITE_LIBLOGIC_PATH "${CMAKE_CURRENT_SOURCE_DIR}/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full" CACHE STRING "Path to TensileLite library logic files.")
+            set(TENSILELITE_LIBRARY_FORMAT "msgpack" CACHE STRING "Device library serialization format (msgpack or yaml).")
+            set(Tensile_NO_LAZY_LIBRARY_LOADING OFF CACHE BOOL "Disable lazy loading of device libraries.")
+
+            # Translate the historical hipSPARSELt option spellings into the flags the
+            # shared hipblaslt_create_device_library() API expects. Without this these
+            # -D options were silently dropped (msgpack + lazy-load always won).
+            set(_hipsparselt_yaml_format OFF)
+            if(TENSILELITE_LIBRARY_FORMAT STREQUAL "yaml")
+                set(_hipsparselt_yaml_format ON)
+            endif()
+            set(_hipsparselt_lazy_load ON)
+            if(Tensile_NO_LAZY_LIBRARY_LOADING)
+                set(_hipsparselt_lazy_load OFF)
+            endif()
+            # Tensile_MERGE_FILES has no equivalent in the new codegen API (hipBLASLt
+            # dropped it too); it is intentionally not forwarded.
             hipblaslt_create_device_library(
                 TARGET tensilelite-device-libraries
-                LOGIC_PATH "${CMAKE_CURRENT_SOURCE_DIR}/library/src/hcc_detail/rocsparselt/src/spmm/Tensile/Logic/asm_full"
+                LOGIC_PATH "${TENSILELITE_LIBLOGIC_PATH}"
                 OUTPUT_DIR "${_hipsparselt_tensile_out}"
                 ARCHES ${GPU_TARGETS}
                 CXX_COMPILER "${CMAKE_CXX_COMPILER}"
@@ -214,6 +231,8 @@ if(HIPSPARSELT_ENABLE_HIP)
                 JOBS "${TENSILELITE_BUILD_PARALLEL_LEVEL}"
                 LOGIC_FILTER "${TENSILELITE_LOGIC_FILTER}"
                 ASAN "${HIPSPARSELT_ENABLE_ASAN}"
+                YAML_FORMAT "${_hipsparselt_yaml_format}"
+                LAZY_LOAD "${_hipsparselt_lazy_load}"
                 NO_COMPRESS "${TENSILELITE_NO_COMPRESS}"
                 EXPERIMENTAL "${TENSILELITE_EXPERIMENTAL}"
                 ASM_COMMENTS "${TENSILELITE_ENABLE_ASM_COMMENTS}"
