@@ -115,6 +115,11 @@ mark_as_advanced(CMAKE_BUILD_WITH_INSTALL_RPATH)
 mark_as_advanced(CMAKE_INSTALL_RPATH)
 mark_as_advanced(CMAKE_INSTALL_RPATH_USE_LINK_PATH)
 
+# Under a sanitizer, every sanitized executable needs libclang_rt.<stem>.so on its
+# build-tree rpath. Seed CMAKE_BUILD_RPATH here (before any target is created) so it
+# propagates to all targets, including clients (hipblaslt-test, hipblaslt-bench).
+hipblaslt_add_sanitizer_runtime_rpath()
+
 set(GPU_TARGETS "" CACHE STRING "AMD GFX targets to cross-compile")
 
 if(NOT GPU_TARGETS OR GPU_TARGETS STREQUAL "all")
