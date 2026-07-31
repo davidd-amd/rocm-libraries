@@ -239,6 +239,14 @@ jobs:
           fi
           test -x "${THEROCK_BIN_DIR}/hipblaslt-test"
           echo "Extracted tree:"; ls -1 "${OUTPUT_ARTIFACTS_DIR}"
+          asan_rt="$(find "${OUTPUT_ARTIFACTS_DIR}" -name 'libclang_rt.asan*.so' -print -quit)"
+          if [ -z "${asan_rt}" ]; then
+            echo "::error::libclang_rt.asan runtime not found under ${OUTPUT_ARTIFACTS_DIR}" >&2
+            exit 1
+          fi
+          asan_rt_name="$(basename "${asan_rt}")"
+          ln -sf "$(realpath --relative-to="${OUTPUT_ARTIFACTS_DIR}/lib" "${asan_rt}")" "${OUTPUT_ARTIFACTS_DIR}/lib/${asan_rt_name}"
+          echo "Linked ${asan_rt_name} into lib/ (resolves via the binary's \$ORIGIN/../lib rpath): ${asan_rt}"
 
       - name: Driver / GPU sanity check
         timeout-minutes: 3
