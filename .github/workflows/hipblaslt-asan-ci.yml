@@ -251,20 +251,25 @@ jobs:
         run: |
           set -euo pipefail
           OUT="${GITHUB_WORKSPACE}/build"
-          mapfile -t ASAN_RT_LIBS < <(find "$OUT/lib/llvm/lib/clang" -type f -name 'libclang_rt.asan*.so' 2>/dev/null | sort -u)
-          if [ "${#ASAN_RT_LIBS[@]}" -eq 0 ]; then
-            echo "::error::no libclang_rt.asan*.so found under $OUT/lib/llvm/lib/clang" >&2
-            find "$OUT/lib/llvm/lib/clang" -name 'libclang_rt*' 2>/dev/null | sed 's/^/  present: /' >&2 || true
+          # The sanitized binary resolves libclang_rt.asan.so via a $ORIGIN-relative
+          # INSTALL_RPATH baked at build time (see hipblaslt_add_sanitizer_runtime_rpath);
+          # no LD_LIBRARY_PATH entry for the clang runtime is needed. Assert that here so a
+          # broken rpath fails loudly with the binary's actual rpath instead of an opaque
+          # exit-127 partway through the test run.
+          BIN="${OUT}/bin/hipblaslt-test"
+          echo "RUNPATH:"; readelf -d "$BIN" | grep -iE 'R(UN)?PATH' || true
+          if ldd "$BIN" 2>&1 | grep -iE 'libclang_rt\.asan.*not found'; then
+            echo "::error::hipblaslt-test cannot resolve its ASAN runtime via rpath" >&2
+            ldd "$BIN" 2>&1 | grep -i 'clang_rt' >&2 || true
             exit 1
           fi
-          ASAN_RT_DIRS="$(printf '%s\n' "${ASAN_RT_LIBS[@]}" | xargs -n1 dirname | sort -u | paste -sd: -)"
           LSAN_SUPP="${GITHUB_WORKSPACE}/rocm-libraries/test/therock/lsan.supp"
           {
             echo "ASAN_OPTIONS=quarantine_size_mb=600"
             echo "LSAN_OPTIONS=suppressions=${LSAN_SUPP}:print_suppressions=0"
             echo "HSA_XNACK=1"
             echo "ASAN_SYMBOLIZER_PATH=${OUT}/lib/llvm/bin/llvm-symbolizer"
-            echo "LD_LIBRARY_PATH=${OUT}/lib:${ASAN_RT_DIRS}:${LD_LIBRARY_PATH:-}"
+            echo "LD_LIBRARY_PATH=${OUT}/lib:${LD_LIBRARY_PATH:-}"
           } >> "$GITHUB_ENV"
 
       - name: Test hipBLASLt (quick)

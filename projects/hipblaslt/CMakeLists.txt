@@ -107,7 +107,10 @@ message(STATUS "Enable mxDataGenerator for MX format data generation: ${HIPBLASL
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE CACHE BOOL "Skip build RPATH")
 set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE CACHE BOOL "Build with install RPATH")
-set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN/../llvm/lib" CACHE STRING "Install RPATH")
+# $ORIGIN/../lib/llvm/lib is the real llvm libdir in every dist layout; the trailing
+# $ORIGIN/../llvm/lib only resolves in the full-SDK tree (where llvm -> lib/llvm is a
+# symlink) and is a harmless, skipped entry in the standalone dist.
+set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib:$ORIGIN/../lib/llvm/lib:$ORIGIN/../llvm/lib" CACHE STRING "Install RPATH")
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH FALSE CACHE BOOL "Use link path for RPATH")
 
 mark_as_advanced(CMAKE_SKIP_BUILD_RPATH)

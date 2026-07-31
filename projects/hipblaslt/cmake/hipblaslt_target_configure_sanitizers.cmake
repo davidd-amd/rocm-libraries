@@ -52,15 +52,20 @@ function(hipblaslt_target_configure_sanitizers hipblaslt_target linkage)
     endif()
 endfunction()
 
-# Append the clang sanitizer runtime directory to CMAKE_BUILD_RPATH so that every
-# executable (hipblaslt-test, hipblaslt-bench, samples, ...) can dlopen
-# libclang_rt.<stem>.so from the build tree. Under a sanitizer, the runtime is a
-# DT_NEEDED on all sanitized binaries, but its on-disk location depends on the
-# clang runtime layout (flat lib/linux/libclang_rt.<stem>-<arch>.so vs per-target
-# lib/<triple>/libclang_rt.<stem>.so). We ask the driver via a link dry-run
-# instead of hardcoding a path, so the rpath is correct regardless of layout.
-# Call once at project scope BEFORE any target is created (CMAKE_BUILD_RPATH seeds
-# each target's BUILD_RPATH at creation time).
+# Point every sanitized executable (hipblaslt-test, hipblaslt-bench, samples, ...)
+# at libclang_rt.<stem>.so, which is a DT_NEEDED under -shared-libsan. We seed two
+# rpaths from a single probe:
+#   * CMAKE_BUILD_RPATH   - the absolute clang runtime dir, so binaries run from the
+#                           build tree resolve the runtime during local development.
+#   * CMAKE_INSTALL_RPATH - a $ORIGIN-relative entry (../lib/llvm/<resource-dir>), so
+#                           the *installed/dist* binary is self-contained. The install
+#                           step relinks with INSTALL_RPATH and drops BUILD_RPATH, so
+#                           this (not BUILD_RPATH) is what a packaged artifact uses.
+# The runtime location depends on the clang layout (flat lib/linux/libclang_rt.<stem>-
+# <arch>.so vs per-target lib/<triple>/libclang_rt.<stem>.so); we ask the driver via a
+# link dry-run instead of hardcoding a path, so both are correct regardless of layout.
+# Call once at project scope BEFORE any target is created (the CMAKE_*_RPATH vars seed
+# each target's rpath properties at creation time).
 function(hipblaslt_add_sanitizer_runtime_rpath)
     set(_stem "")
     set(_flag "")
@@ -104,13 +109,28 @@ function(hipblaslt_add_sanitizer_runtime_rpath)
         ERROR_VARIABLE _err
     )
     string(REGEX MATCHALL "/[^ \t\r\n\"]*libclang_rt\\.${_stem}(-[A-Za-z0-9_]+)?\\.so" _hits "${_out}${_err}")
-    if(_hits)
-        list(GET _hits 0 _rt)
-        if(EXISTS "${_rt}")
-            get_filename_component(_rt_dir "${_rt}" DIRECTORY)
-            list(APPEND CMAKE_BUILD_RPATH "${_rt_dir}")
-            set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" PARENT_SCOPE)
-            message(STATUS "hipBLASLt: added sanitizer runtime dir to BUILD_RPATH: ${_rt_dir}")
-        endif()
+    if(NOT _hits)
+        return()
+    endif()
+    list(GET _hits 0 _rt)
+    if(NOT EXISTS "${_rt}")
+        return()
+    endif()
+    get_filename_component(_rt_dir "${_rt}" DIRECTORY)
+
+    # Build tree: absolute runtime dir (only valid on this machine, dropped at install).
+    list(APPEND CMAKE_BUILD_RPATH "${_rt_dir}")
+    set(CMAKE_BUILD_RPATH "${CMAKE_BUILD_RPATH}" PARENT_SCOPE)
+    message(STATUS "hipBLASLt: added sanitizer runtime dir to BUILD_RPATH: ${_rt_dir}")
+
+    # Install/dist tree: re-root the clang resource dir under the dist's lib/llvm as a
+    # $ORIGIN-relative entry so the packaged binary self-resolves the runtime. Inert
+    # (loader skips missing entries) in installs that do not ship lib/llvm, e.g. a
+    # standalone build using an external toolchain, where the runtime is on the system.
+    string(REGEX REPLACE "^.*/(lib/clang/.*)$" "\\1" _rt_tail "${_rt_dir}")
+    if(_rt_tail MATCHES "^lib/clang/")
+        list(APPEND CMAKE_INSTALL_RPATH "$ORIGIN/../lib/llvm/${_rt_tail}")
+        set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_RPATH}" PARENT_SCOPE)
+        message(STATUS "hipBLASLt: added sanitizer runtime dir to INSTALL_RPATH: $ORIGIN/../lib/llvm/${_rt_tail}")
     endif()
 endfunction()
