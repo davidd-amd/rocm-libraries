@@ -33,8 +33,9 @@
 # Verdict KILLED iff base_rc == expect_clean_rc AND revert == ok
 #   AND (when expect_mutant_rc_nonzero=true) the mutant node fails with rc==1.
 #   rc==0 => not killed (survived). rc in {2,3,4,5,...} => INCONCLUSIVE
-#   (collection/usage/internal/interrupt error), NOT a kill. Any non-KILLED row
-#   makes the run FAILURE. (Previously any non-zero rc was wrongly counted a kill.)
+#   (collection/usage/internal/interrupt error), NOT a kill. Expected-pass rows
+#   are reported as OK without claiming a kill; BAD and INCONCLUSIVE rows make
+#   the run fail. (Previously any non-zero rc was wrongly counted a kill.)
 
 set -u
 
@@ -141,6 +142,42 @@ IFS= read -r MANIFEST_HEADER < "$MANIFEST"
   exit 2
 }
 
+# Validate the complete manifest before installing the cleanup trap or running
+# any container command that can mutate source. In particular, a header-only
+# manifest is not evidence that every requested mutant was killed.
+awk -F'\t' '
+  NR == 1 { next }
+  {
+    rows++
+    if (NF != 6) {
+      printf "invalid manifest row %d: expected 6 columns, got %d\n", NR, NF > "/dev/stderr"
+      bad = 1
+      next
+    }
+    for (i = 1; i <= 5; i++) {
+      if ($i == "") {
+        printf "invalid manifest row %d: column %d is empty\n", NR, i > "/dev/stderr"
+        bad = 1
+      }
+    }
+    if ($5 !~ /^-?[0-9]+$/) {
+      printf "invalid manifest row %d: expect_clean_rc must be an integer\n", NR > "/dev/stderr"
+      bad = 1
+    }
+    if ($6 != "true" && $6 != "false") {
+      printf "invalid manifest row %d: expect_mutant_rc_nonzero must be true or false\n", NR > "/dev/stderr"
+      bad = 1
+    }
+  }
+  END {
+    if (rows == 0) {
+      print "invalid manifest: at least one data row is required" > "/dev/stderr"
+      bad = 1
+    }
+    exit bad
+  }
+' "$MANIFEST" || exit 2
+
 # Reject every unsafe target before installing the cleanup trap. The trap only
 # restores the file currently being mutated, which was proven clean beforehand;
 # it can therefore never discard a pre-existing edit from another manifest row.
@@ -188,6 +225,10 @@ printf "mutant_id\tfile\tbase_rc\tmut_rc\trevert\tverdict\tdetail\n" > "$KM"
 printf "%-28s %-8s %s\n" "MUTANT" "VERDICT" "DETAIL" | tee -a "$REPORT"
 
 overall_ok=1
+killed_count=0
+expected_pass_count=0
+bad_count=0
+inconclusive_count=0
 # ----------------------------------------------------------------- main loop (SERIAL)
 # Read manifest, skipping header. IFS=tab.
 {
@@ -197,19 +238,19 @@ overall_ok=1
     detail=""; base_rc=-1; mut_rc=-1; revert="-"; verdict="BAD"
 
     if [[ -n "${extra:-}" ]]; then
-      detail="unexpected-extra-manifest-column"; verdict="BAD"; overall_ok=0
+      detail="unexpected-extra-manifest-column"; verdict="BAD"; overall_ok=0; ((bad_count += 1))
       printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$mid" "$file" "$base_rc" "$mut_rc" "$revert" "$verdict" "$detail" >> "$KM"
       printf "%-28s %-8s %s\n" "$mid" "$verdict" "$detail" | tee -a "$REPORT"; continue
     fi
     if [[ "${exp_mut_nz:-true}" != "true" && "${exp_mut_nz:-true}" != "false" ]]; then
-      detail="expect_mutant_rc_nonzero-must-be-true-or-false"; verdict="BAD"; overall_ok=0
+      detail="expect_mutant_rc_nonzero-must-be-true-or-false"; verdict="BAD"; overall_ok=0; ((bad_count += 1))
       printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$mid" "$file" "$base_rc" "$mut_rc" "$revert" "$verdict" "$detail" >> "$KM"
       printf "%-28s %-8s %s\n" "$mid" "$verdict" "$detail" | tee -a "$REPORT"; continue
     fi
 
     # 0) assert clean before
     if ! git -C "$SRC" diff --quiet HEAD -- "$file"; then
-      detail="dirty-before-apply"; verdict="BAD"; overall_ok=0
+      detail="dirty-before-apply"; verdict="BAD"; overall_ok=0; ((bad_count += 1))
       printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$mid" "$file" "$base_rc" "$mut_rc" "$revert" "$verdict" "$detail" >> "$KM"
       printf "%-28s %-8s %s\n" "$mid" "$verdict" "$detail" | tee -a "$REPORT"; continue
     fi
@@ -221,7 +262,7 @@ overall_ok=1
     ACTIVE_FILE="$file"
     if ! apply_mutant "$method" "$mid" "$file"; then
       revert_active || true
-      detail="apply-failed ($method)"; verdict="BAD"; overall_ok=0
+      detail="apply-failed ($method)"; verdict="BAD"; overall_ok=0; ((bad_count += 1))
       printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$mid" "$file" "$base_rc" "$mut_rc" "$revert" "$verdict" "$detail" >> "$KM"
       printf "%-28s %-8s %s\n" "$mid" "$verdict" "$detail" | tee -a "$REPORT"; continue
     fi
@@ -237,7 +278,12 @@ overall_ok=1
     IFS=$'\t' read -r verdict detail < <(classify_verdict "$base_rc" "${exp_clean:-0}" "$mut_rc" "${exp_mut_nz:-true}" "$revert")
     # KILLED (mut_rc==1) and OK (expected-pass mode) are the non-failing verdicts;
     # BAD and INCONCLUSIVE both fail the run.
-    [[ "$verdict" == "KILLED" || "$verdict" == "OK" ]] || overall_ok=0
+    case "$verdict" in
+      KILLED)       ((killed_count += 1)) ;;
+      OK)           ((expected_pass_count += 1)) ;;
+      INCONCLUSIVE) ((inconclusive_count += 1)); overall_ok=0 ;;
+      *)            ((bad_count += 1)); overall_ok=0 ;;
+    esac
     printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$mid" "$file" "$base_rc" "$mut_rc" "$revert" "$verdict" "$detail" >> "$KM"
     printf "%-28s %-8s %s\n" "$mid" "$verdict" "$detail" | tee -a "$REPORT"
   done
@@ -251,6 +297,12 @@ leak=$(git -C "$SRC" status --porcelain -- 'Tensile/*.py' 'Tensile/**/*.py' \
 if [[ -n "$leak" ]]; then echo "LEAK DETECTED:" | tee -a "$REPORT"; echo "$leak" | tee -a "$REPORT"; overall_ok=0;
 else echo "CLEAN: no mutated-source leak." | tee -a "$REPORT"; fi
 
-[[ $overall_ok -eq 1 ]] && echo "RESULT: ALL KILLED" | tee -a "$REPORT" || echo "RESULT: FAILURE (see above)" | tee -a "$REPORT"
+if [[ $overall_ok -eq 1 && $expected_pass_count -eq 0 ]]; then
+  echo "RESULT: ALL KILLED ($killed_count)" | tee -a "$REPORT"
+elif [[ $overall_ok -eq 1 ]]; then
+  echo "RESULT: SUCCESS (KILLED=$killed_count EXPECTED_PASS=$expected_pass_count)" | tee -a "$REPORT"
+else
+  echo "RESULT: FAILURE (KILLED=$killed_count EXPECTED_PASS=$expected_pass_count BAD=$bad_count INCONCLUSIVE=$inconclusive_count)" | tee -a "$REPORT"
+fi
 echo "kill_matrix: $KM"
 [[ $overall_ok -eq 1 ]]

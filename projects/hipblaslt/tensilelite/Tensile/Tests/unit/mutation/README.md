@@ -125,6 +125,9 @@ The supported tox entry point applies the same cap by default:
 tox -e mutation-unit
 ```
 
+For an intentionally smaller slice, set `MUTMUT_MAX_CHILDREN` explicitly; values
+above the reviewed default of 32 are unsupported.
+
 ```bash
 docker exec \
   -w /work/projects/hipblaslt/tensilelite \
@@ -189,7 +192,7 @@ MUTANT                       VERDICT DETAIL
 Tensile...__mutmut_1         KILLED   base_rc=0 mut_rc=1
 ============================================================
 CLEAN: no mutated-source leak.
-RESULT: ALL KILLED
+RESULT: ALL KILLED (1)
 kill_matrix: work/mutation/verify/kill_matrix.tsv
 ```
 
