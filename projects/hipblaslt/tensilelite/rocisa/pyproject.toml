@@ -20,7 +20,20 @@ cmake.args = ["-DHIPBLASLT_ENABLE_YAML=ON", "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
 # cmake install() rules (_rocisa.so + __init__.py → rocisa/).
 wheel.packages = []
 # Persistent build tree so repeated editable installs recompile incrementally
-# instead of from scratch. This makes the rocisa rebuild that `invoke
-# build-client` triggers a fast no-op when nothing changed. {wheel_tag} keeps
-# per-interpreter/ABI build trees separate.
+# instead of from scratch, and so `editable.rebuild` below can do a fast
+# incremental rebuild. {wheel_tag} keeps per-interpreter/ABI build trees
+# separate.
 build-dir = "build/{wheel_tag}"
+# `uv sync` installs rocisa editable; this recompiles changed C++ automatically
+# on `import rocisa`, replacing the hand-rolled rebuild that `invoke rocisa`
+# used to drive. The staleness guard in rocisa/__init__.py remains as a backstop.
+editable.rebuild = true
+
+# Editable (dev) builds only: install _build_info.py so the staleness guard is
+# active, and build the stinkytofu example plugin so the rocisa plugin tests can
+# exercise it. Neither leaks into the wheel built for `pip install rocisa/`
+# (component CI), keeping released/CI wheels lean.
+[[tool.scikit-build.overrides]]
+if.state = "editable"
+cmake.define.ROCISA_INCLUDE_BUILD_INFO = "ON"
+cmake.define.STINKYTOFU_BUILD_EXAMPLES = "ON"

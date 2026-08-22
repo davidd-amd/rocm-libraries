@@ -88,13 +88,40 @@ TensileBenchmarkCluster = "Tensile.TensileBenchmarkCluster:main"
 TensileRetuneLibrary = "Tensile.TensileRetuneLibrary:main"
 
 [dependency-groups]
-dev = [
-    "rocisa",
+# Run tests:      uv run pytest -m unit Tensile/Tests/unit
+# Lint:           uv run flake8 Tensile
+# Format:         uv run black --line-length=100 Tensile/Common ...
+# Build rocisa:   handled by `uv sync` (editable workspace member, see build group)
+test = [
     "pytest>=5.4.1",
     "pytest-xdist>=1.32.0",
-    "pytest-cov",
     "filelock",
-    "invoke",
+]
+coverage = [
+    { include-group = "test" },
+    "pytest-cov>=4.0.0",
+    "coverage[toml]>=7.0.0",
+]
+lint = [
+    "flake8",
+    "black==24.4",
+    "isort==5.13.2",
+]
+# Build backend for the editable rocisa workspace member. Present in the dev env
+# so scikit-build-core's `editable.rebuild` can recompile rocisa C++ on import.
+build = [
+    "scikit-build-core>=0.10",
+    "nanobind>=2.0",
+    "cmake",
+    "ninja",
+]
+dev = [
+    "rocisa",
+    { include-group = "test" },
+    { include-group = "coverage" },
+    { include-group = "lint" },
+    { include-group = "build" },
+    "memory_profiler",
 ]
 
 [build-system]
