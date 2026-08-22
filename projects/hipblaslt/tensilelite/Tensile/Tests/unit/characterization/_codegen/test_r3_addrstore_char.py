@@ -10,9 +10,6 @@ and asserts every emitted kernel is real gfx942 AMDGCN assembly with err==0.
 
 Target missing ranges in Tensile/AsmAddressCalculation.py:
   - 320-352  : ScaleAlphaVec arm (optSingleColVgpr branch)
-  - 382-396  : ScaleAlphaVec arm (optSharedColVgpr branch)
-  - 397-410  : ScaleAVec arm     (optSharedColVgpr branch)
-  - 411-424  : ScaleBVec arm     (optSharedColVgpr branch)
   - 452-466  : ScaleAlphaVec arm (else/non-opt branch)
   - 467-480  : ScaleAVec arm     (else/non-opt branch)
   - 481-494  : ScaleBVec arm     (else/non-opt branch)
@@ -21,6 +18,9 @@ Gating knobs:
   UseScaleAB: "Vector"   -> ScaleAVec + ScaleBVec emitScaleToBpe arms
   UseScaleAlphaVec: 1    -> ScaleAlphaVec emitScaleToBpe arms
   DataType: f8n          -> required for UseScaleAB=Vector on gfx942
+
+Ordinary GEMM has one packed free index in each output dimension, so these
+kernels do not reach the ``optSharedColVgpr`` branch.
 
 Golden: order-invariant {basename, err} digest snapshot (P4 R3).
 """

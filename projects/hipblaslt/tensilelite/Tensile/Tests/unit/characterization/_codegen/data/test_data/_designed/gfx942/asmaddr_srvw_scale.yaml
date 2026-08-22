@@ -11,14 +11,6 @@
 #   - 333-334 : optSingleColVgpr ScaleAVec LdsOffsetBias arm
 #   - 340-343 : optSingleColVgpr ScaleBVec arm body
 #   - 347-348 : optSingleColVgpr ScaleBVec LdsOffsetBias arm
-#   - 367-372 : optSharedColVgpr ScaleAlphaVec arm body
-#   - 376-377 : optSharedColVgpr ScaleAlphaVec LdsOffsetBias arm
-#   - 382-387 : optSharedColVgpr ScaleAVec arm body
-#   - 391-392 : optSharedColVgpr ScaleAVec LdsOffsetBias arm
-#   - 411-415 : optSharedColVgpr ScaleBVec arm body
-#   - 419-420 : optSharedColVgpr ScaleBVec LdsOffsetBias arm
-#   - 425-428 : optSharedColVgpr ScaleBVec LdsOffsetBias body
-#   - 430-431 : optSharedColVgpr ScaleBVec LdsOffsetBias epilogue
 #   - 462-466 : else ScaleAlphaVec body
 #   - 469-471 : else ScaleAlphaVec LdsOffsetBias arm
 #   - 475-476 : else ScaleAlphaVec LdsOffsetBias arm (continued)
@@ -32,6 +24,9 @@
 #   emitScaleToBpe arms. DataType=f8n is required for UseScaleAB="Vector" on gfx942.
 #   SourceSwap=0 is required by StoreRemapVectorWidth (line 4585 Solution.py).
 #   VectorWidthA=VectorWidthB=1 is required by SRVW (avoids SRVW VW>1 rejection).
+#   Ordinary GEMM cannot derive optSharedColVgpr because it has only one packed
+#   free index per output dimension; this config reaches single-column and
+#   unoptimized edge-store arms.
 #
 # 1 emitted kernel (well under <=8 budget).
 GlobalParameters:

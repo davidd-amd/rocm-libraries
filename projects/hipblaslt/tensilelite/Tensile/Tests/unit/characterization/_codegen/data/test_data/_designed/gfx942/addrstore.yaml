@@ -6,9 +6,6 @@
 #
 # Target: AsmAddressCalculation.py missing ranges (addressing arms):
 #   - 320-352  : ScaleAlphaVec arm (optSingleColVgpr) -- UseScaleAlphaVec=1
-#   - 382-396  : ScaleAlphaVec arm (optSharedColVgpr) -- UseScaleAlphaVec=1
-#   - 397-410  : ScaleAVec arm     (optSharedColVgpr) -- UseScaleAB="Vector"
-#   - 411-424  : ScaleBVec arm     (optSharedColVgpr) -- UseScaleAB="Vector"
 #   - 452-466  : ScaleAlphaVec arm (else branch)      -- UseScaleAlphaVec=1
 #   - 467-480  : ScaleAVec arm     (else branch)      -- UseScaleAB="Vector"
 #   - 481-494  : ScaleBVec arm     (else branch)      -- UseScaleAB="Vector"
@@ -22,8 +19,9 @@
 #   - MatrixInstruction: 2 MFMA shapes sweep different coordOffset1 ranges:
 #       [16,16,32,1,1,4,4,2,2] -> MT128x128 (MIWaveGroup[1]=2)
 #       [16,16,32,1,1,4,4,4,4] -> MT256x256 (MIWaveGroup[1]=4)
-#     Together they cover different optSingleColVgpr / optSharedColVgpr
-#     branches by varying the element batch structure.
+#     Together they vary the element batch structure. Ordinary GEMM derives
+#     one packed free index per dimension, so this config reaches the
+#     optSingleColVgpr and unoptimized edge branches, not optSharedColVgpr.
 #
 # 2 emitted kernels (well under <=8 budget).
 GlobalParameters:
@@ -42,7 +40,7 @@ BenchmarkProblems:
   # F8NSS (fp8-norm in / fp32 out / fp32 compute) TN
   # UseScaleAB: Vector + UseScaleAlphaVec: 1 gates AsmAddressCalculation.py
   # ScaleAVec/ScaleBVec/ScaleAlphaVec addressing arms (lines 320-494).
-  # Two MatrixInstruction shapes sweep optSingleColVgpr / optSharedColVgpr.
+  # Two MatrixInstruction shapes vary the optSingleColVgpr store batches.
   ########################################
   -
     - # ProblemType

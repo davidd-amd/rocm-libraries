@@ -13883,7 +13883,8 @@ class KernelWriterAssembly(KernelWriter):
   ##############################################################################
   # LocalSplitU: Global Write Indices
   ##############################################################################
-  def localSplitUGlobalWriteIndices(self, kernel):
+  # Legacy orphan: kernelBody routes LocalSplitU through Component.LSU.globalWriteIndices.
+  def localSplitUGlobalWriteIndices(self, kernel):  # pragma: no cover
     module = Module("localSplitUGlobalWriteIndices")
 
     # Add LSU Offset back
@@ -14641,7 +14642,8 @@ class KernelWriterAssembly(KernelWriter):
   ##############################################################################
   # LocalSplitU: Global Write
   ##############################################################################
-  def localSplitUGlobalWrite(self, kernel, tPA, tPB):
+  # Legacy orphan: kernelBody routes LocalSplitU through Component.LSU.globalWrite.
+  def localSplitUGlobalWrite(self, kernel, tPA, tPB):  # pragma: no cover
     if not self.do["PostLoop"]: return ""
 
     elements_0 = [[] for y in range(2)]
@@ -16963,7 +16965,8 @@ class KernelWriterAssembly(KernelWriter):
     return module
 
   ##############################################################################
-  def addScaleVecLoad(self, kernel, ss, name: str, srdName: str, addrScaleVecVgpr, scaleVecVgpr, gwvw, scaleVecOffset, addVecPostfix = True):
+  # Legacy helper with no call sites in the supported generator.
+  def addScaleVecLoad(self, kernel, ss, name: str, srdName: str, addrScaleVecVgpr, scaleVecVgpr, gwvw, scaleVecOffset, addVecPostfix = True):  # pragma: no cover
     """
     Add scaleAlphaVec for the element with addrCalc, elementIdx, and scaleVecVgpr.
     scaleVecVgpr is one or more vgpr :temp vGPR ( = gwvw * numbytes // 4 + 1 if cvt is needed)
@@ -17018,7 +17021,8 @@ class KernelWriterAssembly(KernelWriter):
         assert 0, "bad bpl"
       return module
 
-  def addBiasLoad(self, dataType, kernel, gwvw, addrCalc, biasVgpr, factorDim, isLocal=False):
+  # Legacy helper with no call sites in the supported generator.
+  def addBiasLoad(self, dataType, kernel, gwvw, addrCalc, biasVgpr, factorDim, isLocal=False):  # pragma: no cover
     if isLocal and (self.states.useBias == DataDirection.READ):
       return self.addLdsLoad(dataType, biasVgpr, addrCalc.addrBiasVgpr, addrCalc.biasOffset[factorDim], gwvw, comment="Load Bias")
 
@@ -18732,7 +18736,8 @@ class KernelWriterAssembly(KernelWriter):
           self.labels.getUniqueNamePrefix("Positive"),
           posNeg, comment)
 
-  def sMagicDivWrapper(self, dest, dividend, magicNumber, magicShift):
+  # Legacy helper with no call sites in the supported generator.
+  def sMagicDivWrapper(self, dest, dividend, magicNumber, magicShift):  # pragma: no cover
     tmpVgpr = self.vgprPool.checkOut(2, tag="sMagicDivWrapper_tmpVgpr")
     tmpVgprRes = ContinuousRegister(tmpVgpr, 2)
     module = sMagicDiv(dest, self.states.asmCaps["HasSMulHi"], dividend, magicNumber, magicShift, tmpVgprRes)
@@ -18829,7 +18834,8 @@ class KernelWriterAssembly(KernelWriter):
     self.vgprPool.checkIn(tmp.idx)
     return module
 
-  def dumpLDS(self, kernel, startU, numU):
+  # Manual debug helper; it is not called by supported generation paths.
+  def dumpLDS(self, kernel, startU, numU):  # pragma: no cover
     tmp = ContinuousRegister(idx=self.vgprPool.checkOut(2, tag="dumpLDS_tmp"), size=2)
     module = self.dumpData.dumpLds(startU, numU, tmp, self.states.bpeAB, kernel["NumThreads"], \
       self.labels.getUniqueName())

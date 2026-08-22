@@ -450,3 +450,39 @@ stable and self-invalidating. Motivating context: ROCM-7144.
 and must be confirmed byte-identical via `--snapshot-update` in a build
 environment; the `-m unit` lane needs the compiled rocisa module, which is not
 available where this change was authored.
+
+## D21 — Exclude orphaned KernelWriterAssembly helpers from coverage
+
+**Decision:** Mark six `KernelWriterAssembly` methods with definition-level
+`# pragma: no cover` clauses:
+
+- `localSplitUGlobalWriteIndices` and `localSplitUGlobalWrite`;
+- `addScaleVecLoad` and `addBiasLoad`;
+- `sMagicDivWrapper`;
+- `dumpLDS`.
+
+**Why:** The two LocalSplitU overrides are legacy implementations with no
+callers. `KernelWriter.kernelBody` dispatches `LocalSplitU > 1` through
+`Component.LSU.globalWriteIndices` and `Component.LSU.globalWrite`; the
+non-LSU path calls the separate `notLocalSplitUGlobalWrite*` methods.
+Repository-wide call-site searches also find no callers for the three legacy
+load/division helpers. `dumpLDS` is a manual debug helper and is not part of
+a supported generation path. These methods remain candidates for deletion in
+the codegen refactor; the pragma records their current reachability status
+without adding artificial direct-call tests.
+
+**Coverage effect:** Against the source-matched post-MUTCOV-007 coverage
+artifact, these bodies account for 156 missing statements and 50 missing
+branch arcs. Definition-level exclusion removes 162 statements in total
+(the six import-time definition statements plus the 156 bodies) and all 50
+arcs from the denominator. Coverage.py 7.14.1 static analysis confirms each
+complete clause is excluded.
+
+**Deliberately not excluded:** `bomb`, assertion helpers, and abstract/base
+stubs. `bomb` has a live caller through the assembly assertion machinery;
+abstract methods and `raise AssertionError`/`raise NotImplementedError` are
+already handled by the project coverage configuration.
+
+**Verification:** `KernelWriterAssembly.py` parses successfully,
+`git diff --check` is clean, and the coverage.py analyzer reports statements
+`13252 → 13090` and branches `5966 → 5916`.

@@ -15,12 +15,6 @@ Config A -- asmaddr_srvw_scale.yaml:
     - 333-334 : optSingleColVgpr ScaleAVec LdsOffsetBias arm
     - 340-343 : optSingleColVgpr ScaleBVec arm body
     - 347-348 : optSingleColVgpr ScaleBVec LdsOffsetBias arm
-    - 367-372 : optSharedColVgpr ScaleAlphaVec arm body
-    - 376-377 : optSharedColVgpr ScaleAlphaVec LdsOffsetBias arm
-    - 382-387 : optSharedColVgpr ScaleAVec arm body
-    - 391-392 : optSharedColVgpr ScaleAVec LdsOffsetBias arm
-    - 411-415 : optSharedColVgpr ScaleBVec arm body
-    - 419-420 : optSharedColVgpr ScaleBVec LdsOffsetBias arm
     - 462-471 : else ScaleAlphaVec arms + LdsOffsetBias sub-arm
     - 482-490 : else ScaleAVec arms + LdsOffsetBias sub-arm
     - 497-498 : else ScaleBVec LdsOffsetBias arm
@@ -36,6 +30,9 @@ Direct-driver test:
 
 All pure-assert on emitted instructions and/or derived module content.
 pytestmark=pytest.mark.unit. CPU-only.
+
+Ordinary GEMM derives one packed free index per output dimension, so Config A
+does not reach the optSharedColVgpr branch.
 """
 
 import os
