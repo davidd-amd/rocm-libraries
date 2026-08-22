@@ -134,8 +134,8 @@ if(TENSILELITE_ENABLE_HOST)
         if(HIPBLASLT_ENABLE_HOST)
             install(TARGETS tensilelite-host
                 EXPORT hipblaslt-targets
-                RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT runtime
-                LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT runtime
+                RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT tensilelite-host
+                LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT tensilelite-host
                 ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT devel
                 FILE_SET tensilelite_public_headers
                     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" COMPONENT devel
@@ -147,14 +147,14 @@ if(TENSILELITE_ENABLE_HOST)
         elseif(DEFINED TENSILELITE_HOST_EXPORT_SET)
             install(TARGETS tensilelite-host
                 EXPORT ${TENSILELITE_HOST_EXPORT_SET}
-                RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT runtime
-                LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT runtime
+                RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT tensilelite-host
+                LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT tensilelite-host
                 ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT devel
             )
         else()
             install(TARGETS tensilelite-host
-                RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT runtime
-                LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT runtime
+                RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT tensilelite-host
+                LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT tensilelite-host
                 ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT devel
             )
         endif()

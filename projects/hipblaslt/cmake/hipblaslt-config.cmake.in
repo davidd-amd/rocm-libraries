@@ -6,6 +6,8 @@ include(CMakeFindDependencyMacro)
 find_dependency(hipblas-common)
 find_dependency(origami)
 
+set(TENSILELITE_HOST_PACKAGE_VERSION "@TENSILELITE_HOST_PACKAGE_VERSION@")
+
 include("${CMAKE_CURRENT_LIST_DIR}/hipblaslt-targets.cmake")
 
 block(SCOPE_FOR VARIABLES)

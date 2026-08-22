@@ -48,6 +48,13 @@ set(hipblaslt_VERSION_TWEAK "${PROJECT_VERSION_TWEAK}")
 
 set(hipblaslt_SOVERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
 
+set(TENSILELITE_HOST_PACKAGE_VERSION "${PROJECT_VERSION}")
+rocm_get_patch_version(_tensilelite_host_package_patch)
+if(_tensilelite_host_package_patch)
+    string(APPEND TENSILELITE_HOST_PACKAGE_VERSION ".${_tensilelite_host_package_patch}")
+endif()
+unset(_tensilelite_host_package_patch)
+
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     if(WIN32)
       set(CMAKE_INSTALL_PREFIX "C:/hipSDK" CACHE PATH "Install path prefix." FORCE)
@@ -789,6 +796,35 @@ if(ROCM_LIBS_SUPERBUILD OR NOT HIPBLASLT_IS_SUBPROJECT)
     # based on BUILD_SHARED_LIBS. If we don't set this here we will only get
     # a dev package.
     set(BUILD_SHARED_LIBS ${HIPBLASLT_BUILD_SHARED_LIBS})
+    if(TENSILELITE_ENABLE_HOST AND TENSILELITE_BUILD_SHARED_LIBS)
+        rocm_package_setup_component(tensilelite-host
+            PACKAGE_NAME host
+            LIBRARY_NAME tensilelite
+        )
+        get_target_property(_origami_library_type roc::origami TYPE)
+        if(_origami_library_type STREQUAL "SHARED_LIBRARY")
+            if(NOT ORIGAMI_PACKAGE_VERSION)
+                message(FATAL_ERROR
+                    "The shared origami package does not declare ORIGAMI_PACKAGE_VERSION."
+                )
+            endif()
+            rocm_package_add_dependencies(
+                COMPONENT tensilelite-host
+                DEPENDS "origami = ${ORIGAMI_PACKAGE_VERSION}"
+            )
+        endif()
+        unset(_origami_library_type)
+        if(HIPBLASLT_BUILD_SHARED_LIBS)
+            set(_tensilelite_host_consumer_component runtime)
+        else()
+            set(_tensilelite_host_consumer_component devel)
+        endif()
+        rocm_package_add_dependencies(
+            COMPONENT ${_tensilelite_host_consumer_component}
+            DEPENDS "tensilelite-host = ${TENSILELITE_HOST_PACKAGE_VERSION}"
+        )
+        unset(_tensilelite_host_consumer_component)
+    endif()
     set(HIPBLASLT_CONFIG_DIR "\${CPACK_PACKAGING_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}" CACHE PATH "Path placed into ldconfig file")
     rocm_create_package(
         NAME hipblaslt

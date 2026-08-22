@@ -20,6 +20,13 @@ include(dependencies)
 
 rocm_setup_version(VERSION ${PROJECT_VERSION})
 
+set(ORIGAMI_PACKAGE_VERSION "${PROJECT_VERSION}")
+rocm_get_patch_version(_origami_package_patch)
+if(_origami_package_patch)
+    string(APPEND ORIGAMI_PACKAGE_VERSION ".${_origami_package_patch}")
+endif()
+unset(_origami_package_patch)
+
 option(ORIGAMI_BUILD_SHARED_LIBS "Build shared libraries." ${ORIGAMI_STANDALONE})
 option(ORIGAMI_ENABLE_PYTHON "Enable Python bindings." OFF)
 option(ORIGAMI_BUILD_TESTING "Build tests." OFF)

@@ -309,6 +309,25 @@ endif()
 
 # --- Packaging and installation ---
 
+if(HIPSPARSELT_ENABLE_HIP AND HIPSPARSELT_ENABLE_THEROCK)
+    if(NOT TENSILELITE_HOST_PACKAGE_VERSION)
+        message(FATAL_ERROR
+            "The installed hipBLASLt package does not declare "
+            "TENSILELITE_HOST_PACKAGE_VERSION."
+        )
+    endif()
+    if(HIPSPARSELT_BUILD_SHARED_LIBS)
+        set(_tensilelite_host_consumer_component runtime)
+    else()
+        set(_tensilelite_host_consumer_component devel)
+    endif()
+    rocm_package_add_dependencies(
+        COMPONENT ${_tensilelite_host_consumer_component}
+        DEPENDS "tensilelite-host = ${TENSILELITE_HOST_PACKAGE_VERSION}"
+    )
+    unset(_tensilelite_host_consumer_component)
+endif()
+
 if(HIPSPARSELT_ENABLE_CLIENT)
     include(rocm_client_prerequisites)
     rocm_set_client_package_prerequisites()
